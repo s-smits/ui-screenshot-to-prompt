@@ -16,57 +16,57 @@ ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generat
 This project uses Poetry for dependency management. Follow these steps to set up the project:
 
 1. Clone the repository:
-   ```
-   git clone https://github.com/s-smits/ui-screenshot-to-prompt.git
-   cd ui-screenshot-to-prompt
-   ```
+```
+git clone https://github.com/s-smits/ui-screenshot-to-prompt.git
+cd ui-screenshot-to-prompt
+```
 
 2. Install required system dependencies:
-   
-   For Unix-based systems (macOS/Linux):
-   ```
-   # macOS (using Homebrew)
-   brew install rust
 
-   # Linux (Ubuntu/Debian)
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
+For Unix-based systems (macOS/Linux):
+```
+# macOS (using Homebrew)
+brew install rust
+
+# Linux (Ubuntu/Debian)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
 3. Install Poetry if you haven't already:
-   ```
-   curl -sSL https://install.python-poetry.org | python3 -
-   ```
+```
+curl -sSL https://install.python-poetry.org | python3 -
+```
 
 4. Install dependencies:
-   ```
-   poetry install
-   ```
+```
+poetry install
+```
 
 5. Set up environment variables:
-   - Rename the `.env.example` file to `.env`:
-     ```
-     mv .env.example .env
-     ```
-   - Open the `.env` file and replace the placeholder values with your actual API keys and URL:
-     ```
-     OPENAI_API_KEY=your_openai_api_key
-     
-     ANTHROPIC_API_KEY=your_anthropic_api_key
-     # OR
-     OPENROUTER_API_KEY=your_openrouter_api_key
-     ```
+- Rename the `.env.example` file to `.env`:
+  ```
+  mv .env.example .env
+  ```
+- Open the `.env` file and replace the placeholder values with your actual API keys and URL:
+  ```
+  OPENAI_API_KEY=your_openai_api_key
+  
+  ANTHROPIC_API_KEY=your_anthropic_api_key
+  # OR
+  OPENROUTER_API_KEY=your_openrouter_api_key
+  ```
 
 ## Usage
 
 1. Activate the Poetry environment:
-   ```
-   poetry shell
-   ```
+```
+poetry shell
+```
 
 2. Run the Gradio interface:
-   ```
-   python src/ui-screenshot-to-prompt/main.py
-   ```
+```
+python src/ui-screenshot-to-prompt/main.py
+```
 
 3. Open the provided URL in your web browser to access the Gradio interface.
 
