@@ -137,6 +137,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - OpenRouter for API access
 - Gradio for the web interface
 - Tesseract OCR for text extraction
-  
-## Demo
-https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
