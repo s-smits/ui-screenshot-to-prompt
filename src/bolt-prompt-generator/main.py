@@ -2,23 +2,28 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
-from tqdm import tqdm
-from typing import List, Tuple, Optional
+from typing import List, Optional
 import logging
 import base64
 from io import BytesIO
-from config import build_super_prompt, VISION_ANALYSIS_PROMPT, MAIN_DESIGN_ANALYSIS_PROMPT
-import pytesseract
-from dataclasses import dataclass
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor
-from config import load_and_initialize_clients, SPLITTING
-from image_splitter import get_image_splitter
+
+# Configuration imports consolidated
 from config import (
+    build_super_prompt,
+    VISION_ANALYSIS_PROMPT,
+    MAIN_DESIGN_ANALYSIS_PROMPT,
+    load_and_initialize_clients,
+    SPLITTING,
     set_splitting_mode,
-    MIN_COMPONENT_WIDTH,
-    MIN_COMPONENT_HEIGHT
+    MIN_COMPONENT_WIDTH_SIMPLE,
+    MIN_COMPONENT_HEIGHT_SIMPLE,
+    MIN_COMPONENT_WIDTH_ADVANCED,
+    MIN_COMPONENT_HEIGHT_ADVANCED
 )
+
+from image_splitter import get_image_splitter
 
 # Configure logging
 logging.basicConfig(
@@ -239,14 +244,14 @@ def launch_gradio_interface():
                 # Advanced settings (individual components, not in a Column)
                 component_width = gr.Number(
                     label="Minimum Component Width",
-                    value=MIN_COMPONENT_WIDTH,
+                    value=MIN_COMPONENT_WIDTH_ADVANCED,
                     step=1,
                     minimum=1,
                     visible=False
                 )
                 component_height = gr.Number(
                     label="Minimum Component Height",
-                    value=MIN_COMPONENT_HEIGHT,
+                    value=MIN_COMPONENT_HEIGHT_ADVANCED,
                     step=1,
                     minimum=1,
                     visible=False
@@ -255,7 +260,7 @@ def launch_gradio_interface():
         # Output section
         with gr.Row():
             output_text = gr.Textbox(
-                label="Generated Analysis", 
+                label="Caption Analyses", 
                 lines=15,
                 show_copy_button=False
             )
@@ -329,15 +334,36 @@ def launch_gradio_interface():
         )
         
         def copy_final_analysis(final_analysis):
-            if not final_analysis:
-                return gr.update(value="", visible=False), "Please generate an analysis first"
-            return gr.update(value=final_analysis, visible=True), "Final analysis copied!"
+            """Copy final analysis to clipboard with error handling and validation"""
+            try:
+                if not final_analysis or final_analysis.strip() == "":
+                    return (
+                        gr.update(value="", visible=False),
+                        "⚠️ No analysis available to copy. Please generate an analysis first."
+                    )
+                
+                # Clean up the analysis text
+                cleaned_analysis = final_analysis.strip()
+                
+                # Make the text visible and return success message
+                return (
+                    gr.update(value=cleaned_analysis, visible=True),
+                    "✅ Copied final analysis!"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error copying final analysis: {str(e)}")
+                return (
+                    gr.update(value="", visible=False),
+                    "❌ Error copying analysis. Please try again."
+                )
 
         # Update the copy button click handler
         copy_btn.click(
             fn=copy_final_analysis,
             inputs=final_analysis_text,
-            outputs=[final_analysis_text, notification]
+            outputs=[final_analysis_text, notification],
+            show_progress=True
         )
     
     iface.launch()
