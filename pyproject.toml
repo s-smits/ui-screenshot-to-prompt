@@ -19,7 +19,6 @@ scikit-image = "^0.24.0"
 openai = "^1.52.2"
 pytesseract = "^0.3.13"
 gradio = "^5.4.0"
-moviepy = "^1.0.3"
 
 [build-system]
 requires = ["poetry-core"]
