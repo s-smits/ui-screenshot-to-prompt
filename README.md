@@ -22,7 +22,7 @@ The tool offers two splitting modes for analyzing UI images:
 1. **Easy Mode**
 - Grid-based splitting of the image
 - Automatically determines optimal grid size based on image dimensions and aspect ratio (max 3x3)
-- Generates contextual positioning descriptions (e.g., 'header area', 'navigation bar', 'main content') to help LLMs understand component relationships
+- Creates detailed spatial annotations that describe component placement and hierarchy within the interface layout
 
 2. **Advanced Mode** (Experimental)
 - Smart component detection using computer vision techniques
