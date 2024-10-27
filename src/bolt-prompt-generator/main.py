@@ -3,486 +3,119 @@ import cv2
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-from openai import OpenAI
-from typing import List, Tuple
-from dotenv import load_dotenv
+from typing import List, Tuple, Optional
 import logging
 import base64
 from io import BytesIO
-from config import build_super_prompt, SYSTEM_PROMPT, VISION_ANALYSIS_PROMPT
+from config import build_super_prompt, VISION_ANALYSIS_PROMPT, MAIN_DESIGN_ANALYSIS_PROMPT
 import pytesseract
 from dataclasses import dataclass
-from typing import Optional
-import json
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor
+from config import load_and_initialize_clients, SPLITTING
+from image_splitter import get_image_splitter
+from config import (
+    set_splitting_mode,
+    MIN_COMPONENT_WIDTH,
+    MIN_COMPONENT_HEIGHT
+)
 
-# Log Point 1: Configure logging
+# Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.INFO,  # Set to INFO for general logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('image_processing.log'),
         logging.StreamHandler()
     ]
 )
+
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
-logger.info("Environment variables loaded") # Log Point 2
+# Disable debug logging for openai to reduce noise
+logging.getLogger("openai").setLevel(logging.WARNING)
 
-# Initialize the OpenAI client with OpenRouter configuration
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    default_headers={
-        "HTTP-Referer": os.getenv("YOUR_SITE_URL", "https://your-app-url.com"),  # Replace with your actual URL
-        "X-Title": os.getenv("YOUR_SITE_NAME", "Your App Name"),  # Replace with your actual app name
-    }
-)
+# Initialize OpenAI clients
+openai_client, super_prompt_function = load_and_initialize_clients()
 
-@dataclass
-class UIElement:
-    type: str  # 'button', 'text_field', 'checkbox', 'text'
-    bbox: Tuple[int, int, int, int]  # x, y, width, height
-    text: Optional[str] = None
-    confidence: float = 0.0
-    description: Optional[str] = None  # New field for analysis
+def encode_image_base64(image: Image.Image) -> str:
+    """Convert PIL Image to base64 string"""
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
 
-class SmartImageSplitter:
-    def __init__(self, image_path):
-        logger.info(f"Initializing SmartImageSplitter with image: {image_path}") 
-        self.image_path = image_path
-        
-        if not os.path.exists(image_path):
-            logger.error(f"Image file not found: {image_path}")
-            raise FileNotFoundError(f"Image file not found: {image_path}")
-            
-        self.image = cv2.imread(image_path)
-        if self.image is None:
-            logger.error(f"Failed to load image: {image_path}")
-            raise ValueError(f"Failed to load image: {image_path}")
-            
-        self.output_dir = "split_components"
-        self.min_confidence = 0.6
-        self.padding = 10
-        
-        if not os.path.exists(self.output_dir):
-            logger.info(f"Creating output directory: {self.output_dir}")
-            os.makedirs(self.output_dir)
-
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """Preprocess image for better element detection"""
-        # Convert to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Denoise
-        denoised = cv2.fastNlMeansDenoising(gray)
-        # Adaptive threshold
-        thresh = cv2.adaptiveThreshold(
-            denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY_INV, 11, 2
-        )
-        return thresh
-
-    def detect_components(self, min_area=500, max_components=20) -> List[UIElement]:
-        """Detect UI components in the image"""
-        logger.info("Detecting components")
-        
-        # Get text regions using OCR
-        text_elements = self.detect_text_regions(self.image)
-        
-        # Get UI elements using contour detection
-        ui_elements = self.detect_ui_elements(self.image)
-        
-        # Combine all elements
-        all_elements = text_elements + ui_elements
-        
-        # Filter by area
-        all_elements = [elem for elem in all_elements if elem.bbox[2] * elem.bbox[3] >= min_area]
-        
-        # Sort by importance and limit number
-        all_elements.sort(key=self._get_component_importance, reverse=True)
-        all_elements = all_elements[:max_components]
-        
-        # Merge overlapping components
-        merged_elements = self._merge_overlapping_components_ui_elements(all_elements)
-        
-        logger.info(f"Final component count: {len(merged_elements)}")
-        return merged_elements
-
-    def detect_text_regions(self, image: np.ndarray) -> List[UIElement]:
-        """Detect text regions using Tesseract OCR"""
-        text_elements = []
-        
-        # Get OCR data including bounding boxes
-        ocr_data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
-        
-        n_boxes = len(ocr_data['text'])
-        for i in range(n_boxes):
-            # Filter empty results and low confidence
-            if float(ocr_data['conf'][i]) < self.min_confidence:
-                continue
-            if not ocr_data['text'][i].strip():
-                continue
-                
-            x = ocr_data['left'][i]
-            y = ocr_data['top'][i]
-            w = ocr_data['width'][i]
-            h = ocr_data['height'][i]
-            
-            text_elements.append(UIElement(
-                type='text',
-                bbox=(x, y, w, h),
-                text=ocr_data['text'][i],
-                confidence=float(ocr_data['conf'][i])
-            ))
-            
-        return text_elements
-
-    def detect_ui_elements(self, image: np.ndarray) -> List[UIElement]:
-        """Detect UI elements using contour detection"""
-        ui_elements = []
-        
-        # Preprocess
-        processed = self.preprocess_image(image)
-        
-        # Find contours
-        contours, _ = cv2.findContours(
-            processed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        
-        for contour in contours:
-            # Get bounding box
-            x, y, w, h = cv2.boundingRect(contour)
-            
-            # Skip very small elements
-            if w < 20 or h < 20:
-                continue
-                
-            # Analyze shape for classification
-            aspect_ratio = float(w) / h
-            area = cv2.contourArea(contour)
-            hull = cv2.convexHull(contour)
-            hull_area = cv2.contourArea(hull)
-            solidity = float(area) / hull_area if hull_area > 0 else 0
-            
-            # Classify based on shape characteristics
-            if 0.9 <= aspect_ratio <= 1.1 and solidity > 0.9:
-                element_type = 'checkbox'
-            elif 2.5 <= aspect_ratio <= 5 and solidity > 0.8:
-                element_type = 'text_field'
-            elif 1.5 <= aspect_ratio <= 3 and solidity > 0.85:
-                element_type = 'button'
-            else:
-                continue
-                
-            ui_elements.append(UIElement(
-                type=element_type,
-                bbox=(x, y, w, h),
-                confidence=solidity
-            ))
-            
-        return ui_elements
-
-    def _get_component_importance(self, element: UIElement) -> float:
-        """Calculate component importance based on position and content"""
-        x, y, w, h = element.bbox
-        
-        # Factors that increase importance:
-        # 1. Larger area
-        area_score = w * h
-        
-        # 2. Central position (prefer components closer to center)
-        center_x = x + w / 2
-        center_y = y + h / 2
-        img_center_x = self.image.shape[1] / 2
-        img_center_y = self.image.shape[0] / 2
-        
-        distance_from_center = np.sqrt(
-            (center_x - img_center_x) ** 2 + 
-            (center_y - img_center_y) ** 2
-        )
-        position_score = 1 / (1 + distance_from_center)
-        
-        # 3. Aspect ratio closer to common UI element ratios
-        aspect_ratio = w / h if h != 0 else 0
-        ratio_score = min(aspect_ratio, 1 / aspect_ratio) if aspect_ratio > 0 else 0
-        
-        # Combine scores with weights
-        total_score = (
-            0.5 * area_score +
-            0.3 * position_score +
-            0.2 * ratio_score
-        )
-        
-        return total_score
-
-    def _merge_overlapping_components_ui_elements(self, elements: List[UIElement], overlap_threshold=0.3) -> List[UIElement]:
-        """Merge UIElements that overlap significantly"""
-        if not elements:
-            logger.warning("No components to merge")
-            return []
-            
-        merged_elements = []
-        used = set()
-        
-        for i, elem1 in enumerate(elements):
-            if i in used:
-                continue
-                
-            current_bbox = list(elem1.bbox)
-            current_type = elem1.type
-            used.add(i)
-            
-            for j, elem2 in enumerate(elements[i+1:], i+1):
-                if j in used:
-                    continue
-                    
-                # Calculate overlap
-                x1, y1, w1, h1 = current_bbox
-                x2, y2, w2, h2 = elem2.bbox
-                
-                # Find intersection
-                x_left = max(x1, x2)
-                y_top = max(y1, y2)
-                x_right = min(x1 + w1, x2 + w2)
-                y_bottom = min(y1 + h1, y2 + h2)
-                
-                if x_right > x_left and y_bottom > y_top:
-                    intersection = (x_right - x_left) * (y_bottom - y_top)
-                    area1 = w1 * h1
-                    area2 = w2 * h2
-                    overlap_ratio = intersection / min(area1, area2)
-                    
-                    if overlap_ratio > overlap_threshold:
-                        # Merge components
-                        current_bbox[0] = min(x1, x2)
-                        current_bbox[1] = min(y1, y2)
-                        current_bbox[2] = max(x1 + w1, x2 + w2) - current_bbox[0]
-                        current_bbox[3] = max(y1 + h1, y2 + h2) - current_bbox[1]
-                        used.add(j)
-        
-            merged_elements.append(UIElement(
-                type=current_type,
-                bbox=tuple(current_bbox),
-                confidence=min(elem1.confidence, elem2.confidence) if 'elem2' in locals() else elem1.confidence
-            ))
-        
-        logger.info(f"Merged into {len(merged_elements)} components")
-        return merged_elements
-
-    def save_components(self, components: List[UIElement]):
-        """Save detected components as separate images with proper cropping"""
-        logger.info(f"Saving {len(components)} components...")
-        
-        # Create subdirectories for different component types
-        for component_type in ['text', 'button', 'text_field', 'checkbox']:
-            type_dir = os.path.join(self.output_dir, component_type)
-            os.makedirs(type_dir, exist_ok=True)
-        
-        saved_components = []
-        for i, component in enumerate(tqdm(components)):
-            try:
-                x, y, w, h = component.bbox
-                
-                # Add padding around the component (if specified)
-                x1 = max(0, x - self.padding)
-                y1 = max(0, y - self.padding)
-                x2 = min(self.image.shape[1], x + w + self.padding)
-                y2 = min(self.image.shape[0], y + h + self.padding)
-                
-                # Crop the component
-                component_img = self.image[y1:y2, x1:x2]
-                
-                if component_img.size == 0:
-                    logger.warning(f"Skipping empty component {i}")
-                    continue
-                
-                # Create filename with component info
-                filename = f"component_{i:03d}"
-                if component.text:
-                    # Clean text for filename
-                    clean_text = "".join(c for c in component.text if c.isalnum() or c in (' ', '-', '_'))
-                    clean_text = clean_text[:30]  # Limit length
-                    filename += f"_{clean_text}"
-                
-                # Save to type-specific subdirectory
-                output_path = os.path.join(self.output_dir, component.type, f"{filename}.png")
-                
-                # Save the image
-                cv2.imwrite(output_path, component_img)
-                
-                # Store component info
-                saved_components.append({
-                    'type': component.type,
-                    'bbox': (x1, y1, x2-x1, y2-y1),
-                    'text': component.text,
-                    'confidence': component.confidence,
-                    'file': output_path
-                })
-                
-                logger.debug(f"Saved {component.type} component {i} to {output_path}")
-                
-            except Exception as e:
-                logger.error(f"Error saving component {i}: {str(e)}")
-                continue
-        
-        # Save component metadata
-        metadata_path = os.path.join(self.output_dir, 'components_metadata.json')
-        try:
-            with open(metadata_path, 'w') as f:
-                json.dump(saved_components, f, indent=2)
-            logger.info(f"Saved component metadata to {metadata_path}")
-        except Exception as e:
-            logger.error(f"Error saving metadata: {str(e)}")
-        
-        return saved_components
-
-    def visualize_components(self, components):
-        """Visualize detected components on the original image"""
-        logger.info("Visualizing components")
-        viz_image = self.image.copy()
-        logger.info("Drawing component boundaries...")
-        
-        # Different colors for different types
-        colors = {
-            'text': (0, 255, 0),      # Green
-            'button': (255, 0, 0),    # Blue
-            'text_field': (0, 0, 255),# Red
-            'checkbox': (255, 255, 0)  # Cyan
-        }
-        
-        for component in tqdm(components):
-            # Handle both UIElement objects and tuples
-            if isinstance(component, UIElement):
-                x, y, w, h = component.bbox
-                component_type = component.type
-            else:
-                # If it's a tuple, unpack directly
-                x, y, w, h = component
-                component_type = 'unknown'  # Default type for raw bounding boxes
-                
-            color = colors.get(component_type, (0, 255, 0))
-            cv2.rectangle(viz_image, (x, y), (x+w, y+h), color, 2)
-            
-            # Add label if type is known
-            if component_type != 'unknown':
-                cv2.putText(viz_image, component_type, (x, y-5),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        
-        output_path = "detected_components.png"
-        cv2.imwrite(output_path, viz_image)
-        logger.info(f"Saved visualization to {output_path}")
-
-    def analyze_components(self, components: List[UIElement]) -> List[str]:
-        """Analyze detected UI components"""
-        analyses = []
-        for idx, component in enumerate(components):
-            x, y, w, h = component.bbox
-            
-            analysis = (
-                f"Component {idx}: {component.type}"
-                f" at position ({x}, {y})"
-                f" with size {w}x{h}"
-            )
-            if component.text:
-                analysis += f" containing text: {component.text}"
-                
-            analyses.append(analysis)
-            logger.info(analysis)
-        
-        return analyses
-
-def analyze_main_design_choices(image: Image.Image, temp: float = 0.1) -> str:
-    """Analyze the main flow/purpose of the entire image"""
-    logger.info("Analyzing main design choices")
-    
+def call_vision_api(image: Image.Image, system_prompt: str, user_prompt: str, 
+                   temperature: float = 0.1, json_response: bool = True) -> str:
+    """Unified function for calling OpenAI Vision API"""
     try:
-        # Convert PIL Image to base64
-        buffered = BytesIO()
-        image.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Normally gpt-4o but for testing
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Analyze the main design patterns and purpose of this interface, focus on every component of the UI and what you see, which is needed later for an AI coder to reproduce the design."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_str}",
-                                "detail": "high"
-                            }
+        img_str = encode_image_base64(image)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user", 
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{img_str}",
+                            "detail": "high"
                         }
-                    ]
-                }
-            ],
-            max_tokens=1000,
-            temperature=temp
-        )
+                    }
+                ]
+            }
+        ]
         
-        return response.choices[0].message.content
-        
-    except Exception as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        return f"Error analyzing design: {str(e)}"
-
-def analyze_component(args):
-    """Analyze individual component of the image"""
-    component_image, main_design_choices, component_index = args
-    logger.info(f"Analyzing component {component_index}")
-    
-    try:
-        # Convert PIL Image to base64
-        buffered = BytesIO()
-        component_image.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Updated model name
-            messages=[
-                {"role": "system", "content": VISION_ANALYSIS_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"Context: {main_design_choices}\n\nAnalyze component {component_index}:"},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_str}",
-                                "detail": "high"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=1000,
-            temperature=0.1
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=1024,
+            temperature=temperature,
+            response_format={"type": "json_object"} if json_response else None
         )
         
         return response.choices[0].message.content.strip()
         
     except Exception as e:
-        logger.error(f"API error analyzing component {component_index}: {str(e)}")
-        return f"Error analyzing component {component_index}: {str(e)}"
+        logger.error(f"OpenAI API error: {str(e)}")
+        raise
 
-def process_image(image_path: str, min_area: int = 1000, max_components: int = 10):
+def analyze_main_design_choices(image: Image.Image, temp: float = 0.1) -> str:
+    """Analyze the main flow/purpose of the entire image"""
+    logger.info("Analyzing main design choices")
+    prompt = """Analyze this interface's complete design system and structure.
+    Provide a detailed analysis following the JSON schema in the system prompt.
+    Focus on implementation-relevant details and consistent patterns."""
+    
+    return call_vision_api(image, MAIN_DESIGN_ANALYSIS_PROMPT, prompt, temp)
+
+def analyze_component(args):
+    """Analyze individual component of the image"""
+    component_image, main_design_choices, component_index, location = args
+    logger.info(f"Analyzing component {component_index} in {location}")
+    
+    prompt = f"""Analyze this UI component:
+    - Located in: {location}
+    - Component number: {component_index}
+    
+    Provide structured analysis following the JSON schema in the system prompt.
+    Focus on implementation-relevant details."""
+    
+    return call_vision_api(component_image, VISION_ANALYSIS_PROMPT, prompt)
+
+def process_image(image_path: str, min_area: Optional[float] = None, max_components: int = 10):
     """Main function to process and analyze an image"""
     logger.info(f"Starting image processing for {image_path}")
     try:
-        # Initialize splitter
-        splitter = SmartImageSplitter(image_path)
+        # Initialize splitter based on SPLITTING mode
+        splitter = get_image_splitter(SPLITTING, image_path)
         
-        # Detect components
-        components = splitter.detect_components(
-            min_area=min_area,
-            max_components=max_components
-        )
+        # Get components (now includes location information)
+        components = splitter.get_components()
+        
+        if not components:
+            logger.error("No components detected. Exiting processing.")
+            return "No components detected.", [], "Error in final analysis"
         
         # Analyze main image first
         main_image = Image.open(image_path)
@@ -495,10 +128,12 @@ def process_image(image_path: str, min_area: int = 1000, max_components: int = 1
         analysis_args = []
         for i, component in enumerate(components):
             x, y, w, h = component.bbox
-            component_img = splitter.image[y:y+h, x:x+w]
+            component_img = cv2.cvtColor(np.array(splitter.image), cv2.COLOR_RGB2BGR)[y:y+h, x:x+w]
             component_rgb = cv2.cvtColor(component_img, cv2.COLOR_BGR2RGB)
             component_pil = Image.fromarray(component_rgb)
-            analysis_args.append((component_pil, main_design_choices, i))
+            
+            # Include location information from component.text
+            analysis_args.append((component_pil, main_design_choices, i, component.text))
             
             # Save the component
             output_path = os.path.join(splitter.output_dir, f"component_{i}.png")
@@ -508,12 +143,13 @@ def process_image(image_path: str, min_area: int = 1000, max_components: int = 1
         with ThreadPoolExecutor(max_workers=5) as executor:
             component_analyses = list(executor.map(analyze_component, analysis_args))
         
-        # Link analyses to components
+        # Link analyses to components and include location information
+        descriptions = []
         for component, analysis in zip(components, component_analyses):
-            component.description = analysis  # Storing the analysis in the UIElement
-        
-        # Extract descriptions for the super prompt
-        descriptions = [component.description for component in components]
+            location_info = f"[{component.text}] "  # Add location prefix
+            full_analysis = location_info + analysis
+            component.text = full_analysis  # Store the full analysis
+            descriptions.append(full_analysis)
         
         # Build and call super prompt
         final_analysis = call_super_prompt(
@@ -522,9 +158,12 @@ def process_image(image_path: str, min_area: int = 1000, max_components: int = 1
             activity_description
         )
         
-        logger.info("Final analysis: %s", final_analysis)
         # Visualize all components
-        splitter.visualize_components(components)
+        splitter.visualize_components(
+            cv2.cvtColor(np.array(splitter.image), cv2.COLOR_RGB2BGR),
+            components,
+            os.path.join(splitter.output_dir, "visualization.png")
+        )
         
         logger.info("Image processing completed successfully")
         return main_design_choices, descriptions, final_analysis
@@ -533,45 +172,181 @@ def process_image(image_path: str, min_area: int = 1000, max_components: int = 1
         logger.error(f"Error processing image: {str(e)}", exc_info=True)
         return "Error processing image", [], "Error in final analysis"
 
-def gradio_process_image(image):
+def gradio_process_image(image, splitting_mode):
     """Process image uploaded through Gradio interface"""
-    logger.info("Processing image uploaded through Gradio")
+    logger.info(f"Processing image uploaded through Gradio with splitting mode: {splitting_mode}")
     
     # Save the uploaded image temporarily
     temp_image_path = "temp_uploaded_image.png"
     image.save(temp_image_path)
     
+    # Update config with selected splitting mode
+    global SPLITTING
+    SPLITTING = splitting_mode.lower()
+    
     # Process the image
     main_design_choices, analyses, final_analysis = process_image(temp_image_path)
+    
+    # Get visualization image if in advanced mode
+    visualization_image = None
+    if splitting_mode.lower() == "advanced":
+        viz_path = os.path.join("split_components", "visualization.png")
+        if os.path.exists(viz_path):
+            visualization_image = Image.open(viz_path)
     
     # Remove temporary image
     os.remove(temp_image_path)
     
-    # Prepare output
-    output = f"Main Design Choices:\n{main_design_choices}\n\n"
-    output += "Component Analyses:\n"
+    # Prepare output with Markdown formatting
+    output = f"**Main Design Choices:**\n{main_design_choices}\n\n"
+    output += "**Component Analyses:**\n"
     for i, analysis in enumerate(analyses):
-        output += f"Component {i}: {analysis}\n"
-    output += f"\nFinal Analysis:\n{final_analysis}"
+        output += f"**Component {i}:** {analysis}\n"
+    output += f"\n**Final Analysis:**\n{final_analysis}"
     
-    return output
+    return final_analysis, output, visualization_image
 
 def launch_gradio_interface():
     """Launch Gradio interface"""
-    iface = gr.Interface(
-        fn=gradio_process_image,
-        inputs=gr.Image(type="pil"),
-        outputs="text",
-        title="Bolt.new Prompt Generator",
-        description="Upload an image of a UI to generate a prompt for an AI coder to reproduce the design."
-    )
+    with gr.Blocks(css="""
+        button { margin: 0.5em; }
+        .container { margin: 0 auto; max-width: 1200px; }
+        .image-container { flex: 0 0 70%; }
+        .controls-container { flex: 0 0 30%; }
+    """) as iface:
+        gr.Markdown("# Bolt.new Prompt Generator")
+        gr.Markdown("Upload an image of a UI to generate a prompt for an AI coder to reproduce the design.")
+        
+        # Main container with 70-30 split
+        with gr.Row(equal_height=True):
+            # Left side - Image containers (70%)
+            with gr.Column(scale=7):
+                input_image = gr.Image(type="pil", label="Upload UI Image")
+                visualization_image = gr.Image(
+                    label="Component Detection Visualization",
+                    visible=False
+                )
+            
+            # Right side - Controls (30%)
+            with gr.Column(scale=3):
+                splitting_mode = gr.Radio(
+                    choices=["Easy", "Advanced"],
+                    value="Easy",
+                    label="Splitting Mode",
+                    info="Easy: Grid-based splitting, Advanced: Smart component detection"
+                )
+                
+                # Advanced settings (individual components, not in a Column)
+                component_width = gr.Number(
+                    label="Minimum Component Width",
+                    value=MIN_COMPONENT_WIDTH,
+                    step=1,
+                    minimum=1,
+                    visible=False
+                )
+                component_height = gr.Number(
+                    label="Minimum Component Height",
+                    value=MIN_COMPONENT_HEIGHT,
+                    step=1,
+                    minimum=1,
+                    visible=False
+                )
+
+        # Output section
+        with gr.Row():
+            output_text = gr.Textbox(
+                label="Generated Analysis", 
+                lines=15,
+                show_copy_button=False
+            )
+        
+        with gr.Row():
+            final_analysis_text = gr.Textbox(
+                label="Final Analysis", 
+                lines=5,
+                visible=False
+            )
+        
+        with gr.Row():
+            process_btn = gr.Button("Generate Prompt")
+            copy_btn = gr.Button("Copy Final Analysis")
+            
+        notification = gr.Textbox(label="Status", interactive=False)
+        
+        def update_mode(mode):
+            """Update visibility of advanced settings based on mode"""
+            set_splitting_mode(mode)
+            is_advanced = mode.lower() == "advanced"
+            return gr.update(visible=is_advanced), gr.update(visible=is_advanced)
+        
+        # Update splitting_mode change handler
+        splitting_mode.change(
+            fn=update_mode,
+            inputs=[splitting_mode],
+            outputs=[component_width, component_height]
+        )
+        
+        # Rest of the event handlers...
+        def process_with_settings(image, mode, width, height):
+            """Process image with current settings"""
+            if image is None:
+                return "", "Please upload an image first.", None, "Please upload an image"
+            
+            try:
+                logger.info(f"Processing with width={width}, height={height}")
+                final_analysis, full_output, viz_image = gradio_process_image(
+                    image=image,
+                    splitting_mode=mode
+                )
+                
+                viz_visible = mode.lower() == "advanced"
+                return (
+                    final_analysis,
+                    full_output,
+                    gr.update(value=viz_image, visible=viz_visible) if viz_image else gr.update(visible=False),
+                    "Analysis generated successfully"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error processing image: {str(e)}")
+                return "", f"Error processing image: {str(e)}", gr.update(visible=False), "Error occurred"
+
+        # Connect the process button
+        process_btn.click(
+            fn=process_with_settings,
+            inputs=[
+                input_image,
+                splitting_mode,
+                component_width,
+                component_height
+            ],
+            outputs=[
+                final_analysis_text,
+                output_text,
+                visualization_image,
+                notification
+            ]
+        )
+        
+        def copy_final_analysis(final_analysis):
+            if not final_analysis:
+                return gr.update(value="", visible=False), "Please generate an analysis first"
+            return gr.update(value=final_analysis, visible=True), "Final analysis copied!"
+
+        # Update the copy button click handler
+        copy_btn.click(
+            fn=copy_final_analysis,
+            inputs=final_analysis_text,
+            outputs=[final_analysis_text, notification]
+        )
+    
     iface.launch()
 
 def main():
-    # Process single image
+    # Process single image (if needed)
     logger.info("Starting image processing")
-    image_path = os.path.join("image", "image.png")
-    logger.info(f"\nProcessing image...")
+    image_path = os.path.join("images", "image.png")
+    logger.info("Processing image...")
     main_design_choices, analyses, final_analysis = process_image(image_path)
     
     if analyses:
@@ -584,68 +359,41 @@ def main():
     else:
         logger.error("Failed to process image")
 
-def describe_activity(image: Image.Image):
+def describe_activity(image: Image.Image) -> str:
+    """Describe the activity shown in the image"""
     logger.info("Describing activity in image")
+    prompt = "What activity is shown in this image?"
     
-    buffered = BytesIO()
-    image.save(buffered, format="PNG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Updated model name
-            messages=[
-                {"role": "system", "content": "Describe the activity in a few sentences."},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What activity is shown in this image?"},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_str}",
-                                "detail": "high"
-                            }
-                        }
-                    ]
-                }
-            ],
-            temperature=0.1,
-            max_tokens=50
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        return "Error describing activity"
+    return call_vision_api(
+        image, 
+        "Describe the activity in a few sentences.", 
+        prompt,
+        temperature=0.1,
+        json_response=False
+    )
 
 def call_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
     """Build and send the super prompt integrating all analyses"""
     super_prompt = build_super_prompt(main_image_caption, component_captions, activity_description)
     
-    MODEL_ID = "anthropic/claude-3.5-sonnet"
+    # Add "Build this app:" to the beginning of the prompt
+    super_prompt = f"Build this app: {super_prompt}"
     
-    logger.info(f"Sending request to model: {MODEL_ID}")
+    # Remove last line from super prompt
+    super_prompt = super_prompt.rstrip()
     
+    # Print the super prompt
+    print(f"Super prompt: {super_prompt}")
+    
+    if not super_prompt_function:
+        raise Exception("No API client available for super prompt generation")
+
     try:
-        completion = client.chat.completions.create(
-            model=MODEL_ID,
-            messages=[
-                {
-                    "role": "user",
-                    "content": super_prompt
-                }
-            ]
-        )
-        
-        logger.info("Super prompt successfully processed.")
-        return completion.choices[0].message.content
-    
-    except client.APIError as e:
-        logger.error(f"OpenAI API error: {str(e)}")
-        raise Exception(f"OpenAI API error: {str(e)}")
+        logger.info("Calling super prompt function")
+        return super_prompt_function(super_prompt)
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise Exception(f"Unexpected error: {str(e)}")
+        logger.error("Error in super prompt generation: %s", str(e))
+        raise Exception(f"Error in super prompt generation: {str(e)}")
 
 if __name__ == "__main__":
     launch_gradio_interface()
