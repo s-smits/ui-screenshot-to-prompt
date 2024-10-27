@@ -51,7 +51,6 @@ The tool requires:
 - Required for component and design analysis
 
 2. **Anthropic/Openrouter API**
-2.  
 - Used for creating detailed super prompts via Claude
 - Recommended for most accurate results
 
