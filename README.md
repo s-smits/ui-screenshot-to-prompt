@@ -17,7 +17,7 @@ This project uses Poetry for dependency management. Follow these steps to set up
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/ui-screenshot-to-prompt.git
+   git clone https://github.com/s-smits/ui-screenshot-to-prompt.git
    cd ui-screenshot-to-prompt
    ```
 
@@ -77,3 +77,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - OpenRouter for API access
 - Gradio for the web interface
 - Tesseract OCR for text extraction
+
+## Demo
+[https://github.com/user-attachments/assets/1926d7c3-cf1c-4702-99af-a6f153738120
+](https://github.com/s-smits/ui-screenshot-to-prompt/assets/1926d7c3-cf1c-4702-99af-a6f153738120)
+
