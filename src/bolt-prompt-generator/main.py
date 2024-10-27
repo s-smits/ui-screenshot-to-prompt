@@ -570,7 +570,7 @@ def launch_gradio_interface():
 def main():
     # Process single image
     logger.info("Starting image processing")
-    image_path = os.path.join("images", "image.png")
+    image_path = os.path.join("image", "image.png")
     logger.info(f"\nProcessing image...")
     main_design_choices, analyses, final_analysis = process_image(image_path)
     
