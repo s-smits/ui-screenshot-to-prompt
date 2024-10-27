@@ -50,9 +50,10 @@ The tool requires:
 - Used for vision analysis; general analysis through GPT-4o and individual components through GPT-4o-mini
 - Required for component and design analysis
 
-2. **ANthropic/Opnerouter API
-- Creating the super prompt
-- ...
+2. **Anthropic/Openrouter API**
+2.  
+- Used for creating detailed super prompts via Claude
+- Recommended for most accurate results
 
 ### System Requirements
 
