@@ -13,8 +13,10 @@ global SPLITTING
 SPLITTING = 'easy'
 
 # Default component dimensions
-MIN_COMPONENT_WIDTH = 50
-MIN_COMPONENT_HEIGHT = 50
+MIN_COMPONENT_WIDTH_ADVANCED = 50
+MIN_COMPONENT_HEIGHT_ADVANCED = 50
+MIN_COMPONENT_WIDTH_SIMPLE = 200
+MIN_COMPONENT_HEIGHT_SIMPLE = 200
 
 def set_splitting_mode(mode: str):
     """Update the splitting mode configuration"""
@@ -129,39 +131,66 @@ ANALYZE AND OUTPUT THE FOLLOWING JSON STRUCTURE:
 {
     "layout": {
         "pattern": "primary layout system (grid/flex/etc)",
-        "structure": "overall page organization", 
-        "breakpoints": "responsive considerations"
+        "structure": {
+            "sections": ["header", "main", "footer", etc],
+            "columns": {
+                "count": "number of columns",
+                "sizes": "column width distributions"
+            },
+            "elements": {
+                "boxes": "count and arrangement",
+                "circles": "diameter and placement"
+            }
+        },
+        "spacing": {
+            "between_sections": "major gaps",
+            "between_elements": "element spacing"
+        },
+        "responsive_hints": "visible breakpoint considerations"
     },
     "design_system": {
         "colors": {
-            "primary": color_palette,
-            "secondary": color_palette,
-            "text": color_palette,
-            "background": color_palette
+            "primary": "main color palette",
+            "secondary": "supporting colors",
+            "text": "text hierarchy colors",
+            "background": "surface colors",
+            "interactive": "button/link colors"
         },
         "typography": {
-            "headings": "font family and sizes",
-            "body": "font family and sizes",
-            "special": "any special text styles"
+            "headings": "heading hierarchy",
+            "body": "body text styles",
+            "special": "distinctive text styles"
         },
-        "spacing": {
-            "grid": "base grid units",
-            "padding": "common padding values",
-            "margins": "common margin values"
+        "components": {
+            "shadows": "elevation levels",
+            "borders": "border styles",
+            "radius": "corner rounding"
         }
     },
-    "patterns": {
-        "navigation": "primary navigation pattern",
-        "interactions": ["common interaction patterns"],
-        "components": ["recurring component patterns"]
+    "interactions": {
+        "buttons": {
+            "types": "button variations",
+            "states": "visible states (hover/disabled)"
+        },
+        "inputs": "form element patterns",
+        "feedback": "visible status indicators"
     },
-    "hierarchy": {
-        "visual_flow": "reading/interaction order",
-        "content_priority": "content importance levels",
-        "interaction_points": "primary interaction areas"
+    "content": {
+        "media": {
+            "images": "image usage patterns",
+            "aspect_ratios": "common ratios"
+        },
+        "text": {
+            "lengths": "content constraints",
+            "density": "text distribution"
+        }
     },
-    "preferred_framework": "recommended framework (Next.js/Vue/Svelte/React/Remix/Vite/etc)",
-    "implementation_notes": "key technical considerations (<50 words)"
+    "visual_hierarchy": {
+        "emphasis": "attention hierarchy",
+        "flow": "visual reading order",
+        "density": "content distribution"
+    },
+    "implementation_notes": "key technical considerations (<30 words)"
 }"""
 
 def build_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
@@ -188,133 +217,68 @@ def build_super_prompt(main_image_caption: str, component_captions: List[str], a
 
     Provide a complete technical specification for exact replication:
 
-    1. Layout System
-    - Grid/flexbox configuration 
-    - Component positioning and alignment
-    - Spacing between elements
-    - Responsive breakpoints
-
-    2. Visual Styling
-    - Color palette with hex/rgba values
-    - Typography (fonts, sizes, weights)
-    - Spacing scale
-    - Borders and shadows
-    - Background styles
+    1. Layout Structure
+    - Primary container dimensions
+    - Component positioning map:
+        • Header, main content, sidebars, footer
+        �� Layout elements:
+            - Number and size of columns (e.g., 3 columns at 33% each)
+            - Number and height of rows
+            - Grid/box count and arrangement
+            - Circular elements diameter and placement
+        • Spacing and gaps:
+            - Between major sections
+            - Between grid items
+            - Inner padding
+    - Responsive behavior:
+        • Breakpoint dimensions
+        • Layout changes at each breakpoint
+        • Element reflow rules
     
-    3. Component Library
-    - Recommended component library / framework
-    - Base components and variants
-    - Layout components
-    - Interactive components
-    - State handling
+    2. Visual Style
+    - Colors:
+        • Primary, secondary, accent colors
+        • Background colors
+        • Text colors
+        • Border colors
+    - Typography:
+        • Font sizes
+        • Text weights
+        • Text alignment
+    - Depth and Emphasis:
+        • Visible shadows
+        • Border styles
+        • Opacity levels
     
-    4. Interactive Behavior
-    - Click/tap handling
-    - Hover/focus states
-    - Form validation
-    - Loading states
-    - Animations
+    3. Visible Elements
+    - Controls:
+        • Button appearances
+        • Form element styling
+        • Interactive element looks
+    - Static Elements:
+        • Images and icons
+        • Text content
+        • Decorative elements
+    - Visual States:
+        • Active/selected states
+        • Disabled appearances
+        • Current page indicators
     
-    5. Accessibility
-    - ARIA roles/attributes
-    - Keyboard navigation
-    - Screen reader support
+    4. Content Presentation
+    - Text:
+        • Visible length limits
+        • Current overflow handling
+        • Text wrapping behavior
+    - Media:
+        • Image dimensions
+        • Aspect ratios
+        • Current placeholder states
     
-    6. Implementation Details
-    - Component composition
-    - State management approach
-    - Data flow patterns
-    - Performance optimizations
+    5. Visual Hierarchy
+    - Element stacking
+    - Content grouping
+    - Visual emphasis
+    - Spatial relationships
     """
     
     return super_prompt
-
-# SYSTEM_PROMPT = """You are an expert AI system specialized in computer vision, UI/UX analysis, and design system interpretation. Your core purpose is to analyze and understand complex visual interfaces by breaking them down into meaningful components.
-
-# CONTEXT & CAPABILITIES:
-# - Deep understanding of modern UI/UX patterns and design systems
-# - Expertise in visual hierarchy and component relationships
-# - Ability to recognize common interface patterns across platforms
-# - Knowledge of accessibility and usability principles
-# - Understanding of interactive elements and their behaviors
-
-# DESIGN SYSTEM ELEMENTS TO CONSIDER:
-# 1. Typography:
-# - Headings and text hierarchy
-# - Font families and weights
-# - Text alignment and spacing
-
-# 2. Layout Components:
-# - Navigation bars and menus
-# - Cards and containers
-# - Grid systems and alignment
-# - Whitespace utilization
-# - Responsive patterns
-
-# 3. Interactive Elements:
-# - Buttons and CTAs
-# - Form inputs and fields
-# - Toggles and switches
-# - Dropdown menus
-# - Modal dialogs
-
-# 4. Visual Elements:
-# - Icons and symbols
-# - Images and illustrations
-# - Color schemes and contrast
-# - Shadows and elevation
-# - Borders and dividers
-
-# 5. Content Patterns:
-# - Data tables and lists
-# - Charts and visualizations
-# - Media galleries
-# - Content blocks
-# - Loading states
-
-# 6. Navigation Patterns:
-# - Primary/secondary navigation
-# - Breadcrumbs
-# - Tab systems
-# - Pagination
-# - Search interfaces
-
-# ANALYSIS FRAMEWORK:
-# 1. Component Purpose:
-# - Primary function
-# - User interaction goals
-# - Information hierarchy
-# - Relationship to other components
-
-# 2. Visual Characteristics:
-# - Size and prominence
-# - Color usage and meaning
-# - Typography choices
-# - Spatial relationships
-
-# 3. Interaction Design:
-# - Click/tap targets
-# - State changes
-# - Feedback mechanisms
-# - Gesture support
-
-# 4. Content Structure:
-# - Information architecture
-# - Content hierarchy
-# - Data presentation
-# - Label clarity
-
-# CURRENT DESIGN CONTEXT:
-# {main_design_choices}
-
-# Component Relationships:
-# - How this component (#{component_index}) relates to others
-# - Its role in the overall interface hierarchy
-# - Connection to main navigation flows
-# - Content grouping patterns
-
-# OUTPUT REQUIREMENTS:
-# - Provide a clear, technical description (<10 words)
-# - Focus on primary function and purpose
-# - Consider context from main design choices
-# - Maintain consistency with overall interface patterns"""
