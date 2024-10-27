@@ -26,11 +26,12 @@ The tool offers two splitting modes for analyzing UI images:
 - Automatically determines optimal grid size based on image dimensions and aspect ratio
 - Provides location-aware component analysis (e.g., "left side", "center portion", etc.)
 
-2. **Advanced Mode**
+2. **Advanced Mode** (Experimental)
 - Smart component detection using computer vision techniques
 - Identifies UI elements like buttons, text fields, and checkboxes
 - Includes visualization of detected components
 - Uses configurable minimum dimensions for component detection
+- Note: This mode is still experimental and may need improvements for optimal results
 
 ### Component Analysis
 
