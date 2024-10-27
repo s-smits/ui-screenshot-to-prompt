@@ -21,17 +21,28 @@ This project uses Poetry for dependency management. Follow these steps to set up
    cd ui-screenshot-to-prompt
    ```
 
-2. Install Poetry if you haven't already:
+2. Install required system dependencies:
+   
+   For Unix-based systems (macOS/Linux):
+   ```
+   # macOS (using Homebrew)
+   brew install rust
+
+   # Linux (Ubuntu/Debian)
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   ```
+
+3. Install Poetry if you haven't already:
    ```
    curl -sSL https://install.python-poetry.org | python3 -
    ```
 
-3. Install dependencies:
+4. Install dependencies:
    ```
    poetry install
    ```
 
-4. Set up environment variables:
+5. Set up environment variables:
    Create a `.env` file in the project root and add the following:
    ```
    OPENAI_API_KEY=your_openai_api_key
@@ -79,6 +90,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Tesseract OCR for text extraction
 
 ## Demo
-[https://github.com/user-attachments/assets/1926d7c3-cf1c-4702-99af-a6f153738120
-](https://github.com/s-smits/ui-screenshot-to-prompt/assets/1926d7c3-cf1c-4702-99af-a6f153738120)
+https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
 
