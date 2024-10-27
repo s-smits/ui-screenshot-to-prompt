@@ -18,7 +18,7 @@ This project uses Poetry for dependency management. Follow these steps to set up
 1. Clone the repository:
    ```
    git clone https://github.com/yourusername/ui-screenshot-to-prompt.git
-   cd bolt-prompt-generator
+   cd ui-screenshot-to-prompt
    ```
 
 2. Install Poetry if you haven't already:
@@ -48,7 +48,7 @@ This project uses Poetry for dependency management. Follow these steps to set up
 
 2. Run the Gradio interface:
    ```
-   python src/bolt-prompt-generator/main.py
+   python src/ui-screenshot-to-prompt/main.py
    ```
 
 3. Open the provided URL in your web browser to access the Gradio interface.
