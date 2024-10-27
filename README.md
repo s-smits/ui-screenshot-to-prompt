@@ -47,13 +47,17 @@ Each detected component is analyzed for:
 The tool requires:
 
 1. **OpenAI API**
-- Used for vision analysis via GPT-4 Vision
+- Used for vision analysis; general analysis through GPT-4o and individual components through GPT-4o-mini
 - Required for component and design analysis
+
+2. **ANthropic/Opnerouter API
+- Creating the super prompt
+- ...
 
 ### System Requirements
 
-- Python 3.8+
-- Rust (for certain dependencies)
+- Python 3.10+
+- Rust (unfortunately for [tokenizers]([url](https://pypi.org/project/tokenizers/)) dependency)
 - Poetry (for dependency management)
 
 ## Installation
