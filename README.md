@@ -17,7 +17,7 @@ This project uses Poetry for dependency management. Follow these steps to set up
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/bolt-prompt-generator.git
+   git clone https://github.com/yourusername/ui-screenshot-to-prompt.git
    cd bolt-prompt-generator
    ```
 
