@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "copycoder"
+name = "ui-screenshot-to-prompt"
 version = "0.1.0"
-description = "Add your description here"
-authors = ["Your Name <you@example.com>"]
+description = "ui-screenshot-to-prompt"
+authors = ["Stijn Smits"]
 readme = "README.md"
-packages = [{include = "src/copycoder"}]
+packages = [{include = "src/ui-screenshot-to-prompt"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
