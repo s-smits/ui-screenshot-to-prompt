@@ -43,12 +43,18 @@ This project uses Poetry for dependency management. Follow these steps to set up
    ```
 
 5. Set up environment variables:
-   Create a `.env` file in the project root and add the following:
-   ```
-   OPENAI_API_KEY=your_openai_api_key
-   OPENROUTER_API_KEY=your_openrouter_api_key
-   YOUR_SITE_URL=https://your-app-url.com
-   ```
+   - Rename the `.env.example` file to `.env`:
+     ```
+     mv .env.example .env
+     ```
+   - Open the `.env` file and replace the placeholder values with your actual API keys and URL:
+     ```
+     OPENAI_API_KEY=your_openai_api_key
+     
+     ANTHROPIC_API_KEY=your_anthropic_api_key
+     # OR
+     OPENROUTER_API_KEY=your_openrouter_api_key
+     ```
 
 ## Usage
 
@@ -91,4 +97,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Demo
 https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
-
