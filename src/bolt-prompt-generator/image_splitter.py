@@ -7,6 +7,7 @@ from typing import List, Tuple, Union, Optional, Dict
 from dataclasses import dataclass
 from logging import getLogger
 from tqdm import tqdm
+from config import MIN_COMPONENT_WIDTH_SIMPLE, MIN_COMPONENT_HEIGHT_SIMPLE, MIN_COMPONENT_WIDTH_ADVANCED, MIN_COMPONENT_HEIGHT_ADVANCED
 
 logger = getLogger(__name__)
 
@@ -125,7 +126,7 @@ class EasyImageSplitter(BaseComponentHandler):
         aspect_ratio = self.width / self.height if self.height != 0 else 1
 
         # Each pattern now returns a tuple of grid size and explicit location names
-        if self.width < 200 and self.height < 200:
+        if self.width < MIN_COMPONENT_WIDTH_SIMPLE and self.height < MIN_COMPONENT_HEIGHT_SIMPLE:
             return (1, 1), ['full']
         elif aspect_ratio >= 3:
             return (1, 3), ['left side', 'center portion', 'right side']  # More descriptive locations
@@ -215,7 +216,7 @@ class EasyImageSplitter(BaseComponentHandler):
         return self.get_grid_components()
 
 class SmartImageSplitter(BaseComponentHandler):
-    def __init__(self, image_path: str, min_width: int = 50, min_height: int = 50):
+    def __init__(self, image_path: str, min_width: int = MIN_COMPONENT_WIDTH_ADVANCED, min_height: int = MIN_COMPONENT_HEIGHT_ADVANCED):
         logger.info(f"Initializing SmartImageSplitter with image: {image_path}")
         self.image_path = image_path
         
@@ -241,7 +242,7 @@ class SmartImageSplitter(BaseComponentHandler):
             os.makedirs(self.output_dir)
 
         # Confidence threshold
-        self.confidence_threshold = 0.3  # Initial confidence threshold
+        self.confidence_threshold = 0.3  # Initial confidence threshold 
 
     def preprocess_image_with_kernel(self, image: np.ndarray, kernel_size: Tuple[int, int]) -> np.ndarray:
         """Preprocess image with a specific kernel size for morphological operations"""
@@ -523,13 +524,3 @@ def get_image_splitter(splitting_mode: str, image_path: str):
         return EasyImageSplitter(image_path)
     else:
         raise ValueError(f"Invalid splitting mode: {splitting_mode}")
-
-
-
-
-
-
-
-
-
-
