@@ -1,5 +1,9 @@
 # ui-screenshot-to-prompt
-ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generate detailed prompts for AI coders. It uses computer vision and natural language processing to break down UI components, analyze design patterns, and create comprehensive descriptions for reproducing the design. Very useful for Bolt.new and other upcoming SaaS
+
+ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generate detailed prompts for AI coders. It uses computer vision and natural language processing to break down UI components, analyze design patterns, and create comprehensive descriptions for reproducing the design. Very useful for Bolt.new and other upcoming SaaS.
+
+## Demo
+https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
 
 ## Features
 
@@ -11,9 +15,48 @@ ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generat
 - Activity description generation
 - Gradio web interface for easy usage
 
-## Installation
+## Detailed Usage Guide
 
-This project uses Poetry for dependency management. Follow these steps to set up the project:
+### Splitting Modes
+
+The tool offers two splitting modes for analyzing UI images:
+
+1. **Easy Mode**
+- Grid-based splitting of the image
+- Automatically determines optimal grid size based on image dimensions and aspect ratio
+- Provides location-aware component analysis (e.g., "left side", "center portion", etc.)
+
+2. **Advanced Mode**
+- Smart component detection using computer vision techniques
+- Identifies UI elements like buttons, text fields, and checkboxes
+- Includes visualization of detected components
+- Uses configurable minimum dimensions for component detection
+
+### Component Analysis
+
+Each detected component is analyzed for:
+- Component type classification
+- Position and dimensions
+- Confidence score for detection
+- Location description
+
+## Requirements
+
+### API Requirements
+
+The tool requires:
+
+1. **OpenAI API**
+- Used for vision analysis via GPT-4 Vision
+- Required for component and design analysis
+
+### System Requirements
+
+- Python 3.8+
+- Rust (for certain dependencies)
+- Poetry (for dependency management)
+
+## Installation
 
 1. Clone the repository:
 ```
@@ -94,6 +137,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - OpenRouter for API access
 - Gradio for the web interface
 - Tesseract OCR for text extraction
-
+  
 ## Demo
 https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
