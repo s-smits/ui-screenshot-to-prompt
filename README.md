@@ -34,9 +34,9 @@ This project uses Poetry for dependency management. Follow these steps to set up
 4. Set up environment variables:
    Create a `.env` file in the project root and add the following:
    ```
+   OPENAI_API_KEY=your_openai_api_key
    OPENROUTER_API_KEY=your_openrouter_api_key
    YOUR_SITE_URL=https://your-app-url.com
-   YOUR_SITE_NAME=Your App Name
    ```
 
 ## Usage
