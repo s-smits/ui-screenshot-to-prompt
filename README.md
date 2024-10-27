@@ -6,13 +6,11 @@ ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generat
 https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
 
 ## Features
-
 - Smart image splitting and component detection
 - OCR for text extraction
 - UI element classification (buttons, text fields, checkboxes, etc.)
 - Individual component analysis
 - Overall design pattern analysis
-- Activity description generation
 - Gradio web interface for easy usage
 
 ## Detailed Usage Guide
