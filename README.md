@@ -1,6 +1,6 @@
 # ui-screenshot-to-prompt
 
-ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generate detailed prompts for AI coders. It uses computer vision and natural language processing to break down UI components, analyze design patterns, and create comprehensive descriptions for reproducing the design. Very useful for Bolt.new and other upcoming SaaS.
+ui-screenshot-to-prompt is an AI-powered tool that analyzes UI images to generate detailed prompts for AI coders. It uses computer vision and natural language processing to break down UI components, analyze design patterns, and create comprehensive descriptions for reproducing the design. Very useful for Bolt.new, v0 and other upcoming SaaS.
 
 ## Demo
 https://github.com/user-attachments/assets/79c2722e-942d-4f0c-84bd-11066b63f4c5
