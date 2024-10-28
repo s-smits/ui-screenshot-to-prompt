@@ -237,7 +237,7 @@ def launch_gradio_interface():
                 # Add prompt choice selector at the top of controls
                 prompt_choice = gr.Radio(
                     choices=["Concise", "Extensive"],
-                    value="Concise",
+                    value="Extensive",
                     label="Prompt Detail Level",
                     info="Choose between concise or extensive prompt generation"
                 )
@@ -324,8 +324,7 @@ def launch_gradio_interface():
                 logger.info(f"Processing with width={width}, height={height}, prompt_style={prompt_style}")
                 final_analysis, full_output, viz_image = gradio_process_image(
                     image=image,
-                    splitting_mode=mode,
-                    prompt_size=prompt_style.lower()  # Pass prompt style to processing function
+                    splitting_mode=mode
                 )
                 
                 viz_visible = mode.lower() == "advanced"

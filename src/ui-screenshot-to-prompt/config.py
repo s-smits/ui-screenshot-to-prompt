@@ -222,35 +222,42 @@ def build_super_prompt(
     ])
 
     if prompt_size == "concise":
-        return f"""Analyze this UI interface and provide technical specifications for recreation:
+        return f"""This study presents a systematic analysis framework for precise UI replication, incorporating component specifications and visual hierarchy assessment. The framework examines:
 
-        [Components]
+        [Component Analysis]
         {component_specs}
 
-        [Overall Layout]
+        [Visual Structure]
         {main_image_caption}
 
-        [User Interactions]
+        [Interactive Elements]
         {activity_description}
 
-        Technical Requirements:
+        Technical Specifications for Implementation:
 
-        1. Layout
-        - Container dimensions and spacing
-        - Component positions and alignment
-        - Responsive breakpoints
-        
-        2. Styling
-        - Color palette (primary/secondary)
-        - Typography specs
-        - Visual elements (shadows, borders)
-        
-        3. Components
-        - Interactive elements
-        - Content presentation
-        - Visual hierarchy
+        1. Layout Architecture
+        - Container dimensions and responsive breakpoints
+        - Component positioning matrix including:
+            • Primary sections (header, content, footer)
+            • Grid system specifications
+            • Spatial relationships and padding metrics
 
-        Provide specific measurements and styling details for accurate implementation.
+        2. Visual Parameters
+        - Color schema (primary, secondary, accent)
+        - Typography specifications
+        - Elevation system (shadows, borders)
+
+        3. Component Specifications
+        - Interactive controls
+        - Static elements
+        - State representations
+
+        4. Content Parameters
+        - Text constraints and overflow behavior
+        - Media dimensions and ratios
+        - Component hierarchy
+
+        This framework enables precise replication while maintaining structural integrity and interactive functionality across various viewport dimensions.
         """
     else:
         return f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
