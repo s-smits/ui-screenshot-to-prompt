@@ -12,29 +12,31 @@ from config import MIN_COMPONENT_WIDTH_SIMPLE, MIN_COMPONENT_HEIGHT_SIMPLE, MIN_
 logger = getLogger(__name__)
 
 @dataclass
-class UIElement:
+class UIComponent:  # Renamed from UIElement for clarity and consistency
+    """Data class representing a detected UI component with its properties"""
     type: str
     bbox: Tuple[int, int, int, int]
     confidence: float = 1.0
     text: str = ""
 
-class BaseComponentHandler:
-    """Shared component handling logic between different splitters"""
+class ComponentDetectorBase:  # Renamed from BaseComponentHandler
+    """Base class implementing core UI component detection functionality"""
     
     @staticmethod
     def create_component(bbox: Tuple[int, int, int, int], 
                         component_type: str = "unknown",
-                        location: str = "") -> UIElement:  # Added location parameter
-        return UIElement(
+                        location: str = "") -> UIComponent:
+        """Creates a new UI component instance with specified parameters"""
+        return UIComponent(
             type=component_type,
             bbox=bbox,
             confidence=1.0,
-            text=location  # Store location in text field
+            text=location
         )
 
     @staticmethod
     def visualize_components(image: Union[np.ndarray, Image.Image], 
-                           components: List[UIElement],
+                           components: List[UIComponent],
                            output_path: str,
                            pre_merge: bool = False):
         """Unified component visualization"""
@@ -80,7 +82,7 @@ class BaseComponentHandler:
             raise
 
     @staticmethod
-    def analyze_components(components: List[UIElement]) -> List[str]:
+    def analyze_components(components: List[UIComponent]) -> List[str]:
         """Unified component analysis"""
         analyses = []
         for idx, component in enumerate(components):
@@ -96,9 +98,10 @@ class BaseComponentHandler:
             logger.info(analysis)
         return analyses
 
-class EasyImageSplitter(BaseComponentHandler):
+class BasicComponentDetector(ComponentDetectorBase):
+    """Implements basic grid-based component detection strategy"""
     def __init__(self, image_path: str):
-        logger.info(f"Initializing EasyImageSplitter with image: {image_path}")
+        logger.info(f"Initializing BasicComponentDetector with image: {image_path}")
         self.image_path = image_path
         
         if not os.path.exists(image_path):
@@ -160,7 +163,7 @@ class EasyImageSplitter(BaseComponentHandler):
             else:
                 return (2, 1), ['upper half', 'lower half']
 
-    def get_grid_components(self) -> List[UIElement]:
+    def get_grid_components(self) -> List[UIComponent]:
         """Get components using NumPy for efficient grid division"""
         grid_size, location_names = self.get_grid_pattern()
         rows, cols = grid_size
@@ -211,13 +214,14 @@ class EasyImageSplitter(BaseComponentHandler):
             ]
         }
 
-    def get_components(self) -> List[UIElement]:
+    def get_components(self) -> List[UIComponent]:
         """Convert split regions to UIElements for compatibility"""
         return self.get_grid_components()
 
-class SmartImageSplitter(BaseComponentHandler):
+class AdvancedComponentDetector(ComponentDetectorBase):
+    """Implements advanced contour-based component detection with morphological operations"""
     def __init__(self, image_path: str, min_width: int = MIN_COMPONENT_WIDTH_ADVANCED, min_height: int = MIN_COMPONENT_HEIGHT_ADVANCED):
-        logger.info(f"Initializing SmartImageSplitter with image: {image_path}")
+        logger.info(f"Initializing AdvancedComponentDetector with image: {image_path}")
         self.image_path = image_path
         
         # Component size thresholds
@@ -277,7 +281,7 @@ class SmartImageSplitter(BaseComponentHandler):
         dilated = cv2.dilate(thresh, kernel, iterations=1)
         return dilated
 
-    def detect_components(self, max_components: int = 40) -> List[UIElement]:
+    def detect_components(self, max_components: int = 40) -> List[UIComponent]:
         """Detect UI components in the image"""
         logger.info("Detecting components")
         
@@ -329,7 +333,7 @@ class SmartImageSplitter(BaseComponentHandler):
             logger.error(f"Unable to detect a sufficient number of components ({num_components}) after {max_attempts} attempts.")
             return []
 
-    def detect_ui_elements(self, preprocessed_image: np.ndarray) -> List[UIElement]:
+    def detect_ui_elements(self, preprocessed_image: np.ndarray) -> List[UIComponent]:
         """Detect UI elements using contour detection"""
         logger.info("Detecting UI elements using contours")
         ui_elements = []
@@ -368,7 +372,7 @@ class SmartImageSplitter(BaseComponentHandler):
             else:
                 element_type = 'unknown'  # Catch-all for other UI elements
                 
-            ui_elements.append(UIElement(
+            ui_elements.append(UIComponent(
                 type=element_type,
                 bbox=(x, y, w, h),
                 confidence=solidity
@@ -377,7 +381,7 @@ class SmartImageSplitter(BaseComponentHandler):
         logger.info(f"Detected {len(ui_elements)} UI elements via contours")
         return ui_elements
 
-    def _merge_overlapping_components_ui_elements(self, elements: List[UIElement], overlap_threshold: float = 0.2) -> List[UIElement]:
+    def _merge_overlapping_components_ui_elements(self, elements: List[UIComponent], overlap_threshold: float = 0.2) -> List[UIComponent]:
         """Merge overlapping UI components based on the overlap threshold"""
         logger.info(f"Merging overlapping components with overlap_threshold={overlap_threshold}")
         merged_elements = []
@@ -406,7 +410,7 @@ class SmartImageSplitter(BaseComponentHandler):
                     current_bbox[3] = max(current_bbox[1] + current_bbox[3], elem2.bbox[1] + elem2.bbox[3]) - current_bbox[1]
                     used.add(j)
             
-            merged_elements.append(UIElement(
+            merged_elements.append(UIComponent(
                 type=current_type,
                 bbox=tuple(current_bbox),
                 confidence=elem1.confidence
@@ -434,7 +438,7 @@ class SmartImageSplitter(BaseComponentHandler):
         
         return intersection_area / min_area if min_area > 0 else 0.0
 
-    def save_components(self, components: List[UIElement]):
+    def save_components(self, components: List[UIComponent]):
         """Save detected components as separate images with proper cropping"""
         logger.info(f"Saving {len(components)} components...")
         
@@ -505,7 +509,7 @@ class SmartImageSplitter(BaseComponentHandler):
         
         return saved_components
 
-    def get_components(self) -> List[UIElement]:
+    def get_components(self) -> List[UIComponent]:
         """Get components using smart detection"""
         logger.info("Getting components using smart detection")
         return self.detect_components()
@@ -517,11 +521,23 @@ class SmartImageSplitter(BaseComponentHandler):
         self.MIN_COMPONENT_AREA = self.min_width * self.min_height
         logger.info(f"Updated minimum dimensions to: width={min_width}, height={min_height}")
 
-def get_image_splitter(splitting_mode: str, image_path: str):
-    if splitting_mode == 'advanced':
-        return SmartImageSplitter(image_path)
-    elif splitting_mode == 'easy':
-        return EasyImageSplitter(image_path)
+def create_component_detector(detection_mode: str, image_path: str) -> ComponentDetectorBase:
+    """
+    Factory function to create appropriate component detector instance
+    
+    Args:
+        detection_mode: Strategy to use ('basic' or 'advanced')
+        image_path: Path to input image
+        
+    Returns:
+        ComponentDetectorBase: Configured detector instance
+        
+    Raises:
+        ValueError: If detection_mode is invalid
+    """
+    if detection_mode == 'advanced':
+        return AdvancedComponentDetector(image_path)
+    elif detection_mode == 'basic':  # Changed from 'easy' to 'basic'
+        return BasicComponentDetector(image_path)
     else:
-        raise ValueError(f"Invalid splitting mode: {splitting_mode}")
-
+        raise ValueError(f"Invalid detection mode: {detection_mode}")
