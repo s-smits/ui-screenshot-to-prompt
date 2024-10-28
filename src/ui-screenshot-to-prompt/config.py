@@ -18,6 +18,14 @@ MIN_COMPONENT_HEIGHT_ADVANCED = 50
 MIN_COMPONENT_WIDTH_SIMPLE = 200
 MIN_COMPONENT_HEIGHT_SIMPLE = 200
 
+def set_prompt_choice(choice: str):
+    """Update the prompt choice configuration"""
+    global PROMPT_CHOICE
+    if choice.lower() not in ['concise', 'extensive']:
+        raise ValueError("Invalid prompt choice. Must be 'concise' or 'extensive'")
+    PROMPT_CHOICE = choice.lower()
+    logger.info(f"Prompt choice set to: {PROMPT_CHOICE}")
+
 def set_splitting_mode(mode: str):
     """Update the splitting mode configuration"""
     global SPLITTING
@@ -193,90 +201,131 @@ ANALYZE AND OUTPUT THE FOLLOWING JSON STRUCTURE:
     "implementation_notes": "key technical considerations (<30 words)"
 }"""
 
-def build_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
-    """Build comprehensive prompt incorporating all image analyses for UI recreation"""
-    # Component captions already include location from analyze_component()
-    # Format: "[location] component analysis..."
+def build_super_prompt(
+    main_image_caption: str, 
+    component_captions: List[str], 
+    activity_description: str,
+    prompt_size: str = "concise"
+) -> str:
+    """Build UI recreation prompt with configurable detail level
+    
+    Args:
+        main_image_caption: Overall layout description
+        component_captions: List of component descriptions
+        activity_description: User interaction patterns
+        prompt_size: Size of prompt - "concise" or "extensive" (default: "concise")
+    """
+    # Common component formatting
     component_specs = "\n".join([
-        f"Component {i + 1}:\n{comp}"  # comp already includes location prefix
+        f"Component {i + 1}: {comp}"
         for i, comp in enumerate(component_captions)
     ])
-    
-    super_prompt = f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
 
-    [Component Specifications by Location]
-    {component_specs}
+    if prompt_size == "concise":
+        return f"""Analyze this UI interface and provide technical specifications for recreation:
 
-    [Layout Structure]
-    {main_image_caption}
+        [Components]
+        {component_specs}
 
-    [Interaction Patterns]
-    {activity_description}
+        [Overall Layout]
+        {main_image_caption}
 
-    Provide a complete technical specification for exact replication:
+        [User Interactions]
+        {activity_description}
 
-    1. Layout Structure
-    - Primary container dimensions
-    - Component positioning map:
-        • Header, main content, sidebars, footer
-         Layout elements:
-            - Number and size of columns (e.g., 3 columns at 33% each)
-            - Number and height of rows
-            - Grid/box count and arrangement
-            - Circular elements diameter and placement
-        • Spacing and gaps:
-            - Between major sections
-            - Between grid items
-            - Inner padding
-    - Responsive behavior:
-        • Breakpoint dimensions
-        • Layout changes at each breakpoint
-        • Element reflow rules
-    
-    2. Visual Style
-    - Colors:
-        • Primary, secondary, accent colors
-        • Background colors
-        • Text colors
-        • Border colors
-    - Typography:
-        • Font sizes
-        • Text weights
-        • Text alignment
-    - Depth and Emphasis:
-        • Visible shadows
-        • Border styles
-        • Opacity levels
-    
-    3. Visible Elements
-    - Controls:
-        • Button appearances
-        • Form element styling
-        • Interactive element looks
-    - Static Elements:
-        • Images and icons
-        • Text content
-        • Decorative elements
-    - Visual States:
-        • Active/selected states
-        • Disabled appearances
-        • Current page indicators
-    
-    4. Content Presentation
-    - Text:
-        • Visible length limits
-        • Current overflow handling
-        • Text wrapping behavior
-    - Media:
-        • Image dimensions
-        • Aspect ratios
-        • Current placeholder states
-    
-    5. Visual Hierarchy
-    - Element stacking
-    - Content grouping
-    - Visual emphasis
-    - Spatial relationships
-    """
-    
-    return super_prompt
+        Technical Requirements:
+
+        1. Layout
+        - Container dimensions and spacing
+        - Component positions and alignment
+        - Responsive breakpoints
+        
+        2. Styling
+        - Color palette (primary/secondary)
+        - Typography specs
+        - Visual elements (shadows, borders)
+        
+        3. Components
+        - Interactive elements
+        - Content presentation
+        - Visual hierarchy
+
+        Provide specific measurements and styling details for accurate implementation.
+        """
+    else:
+        return f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
+
+        [Component Specifications by Location]
+        {component_specs}
+
+        [Layout Structure]
+        {main_image_caption}
+
+        [Interaction Patterns]
+        {activity_description}
+
+        Provide a complete technical specification for exact replication:
+
+        1. Layout Structure
+        - Primary container dimensions
+        - Component positioning map:
+            • Header, main content, sidebars, footer
+            • Layout elements:
+                - Number and size of columns (e.g., 3 columns at 33% each)
+                - Number and height of rows
+                - Grid/box count and arrangement
+                - Circular elements diameter and placement
+            • Spacing and gaps:
+                - Between major sections
+                - Between grid items
+                - Inner padding
+        - Responsive behavior:
+            • Breakpoint dimensions
+            • Layout changes at each breakpoint
+            • Element reflow rules
+        
+        2. Visual Style
+        - Colors:
+            • Primary, secondary, accent colors
+            • Background colors
+            • Text colors
+            • Border colors
+        - Typography:
+            • Font sizes
+            • Text weights
+            • Text alignment
+        - Depth and Emphasis:
+            • Visible shadows
+            • Border styles
+            • Opacity levels
+        
+        3. Visible Elements
+        - Controls:
+            • Button appearances
+            • Form element styling
+            • Interactive element looks
+        - Static Elements:
+            • Images and icons
+            • Text content
+            • Decorative elements
+        - Visual States:
+            • Active/selected states
+            • Disabled appearances
+            • Current page indicators
+        
+        4. Content Presentation
+        - Text:
+            • Visible length limits
+            • Current overflow handling
+            • Text wrapping behavior
+        - Media:
+            • Image dimensions
+            • Aspect ratios
+            • Current placeholder states
+        
+        5. Visual Hierarchy
+        - Element stacking
+        - Content grouping
+        - Visual emphasis
+        - Spatial relationships
+        """

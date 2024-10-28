@@ -17,6 +17,7 @@ from config import (
     load_and_initialize_clients,
     SPLITTING,
     set_splitting_mode,
+    set_prompt_choice,
     MIN_COMPONENT_WIDTH_ADVANCED,
     MIN_COMPONENT_HEIGHT_ADVANCED
 )
@@ -218,7 +219,7 @@ def launch_gradio_interface():
         .image-container { flex: 0 0 70%; }
         .controls-container { flex: 0 0 30%; }
     """) as iface:
-        gr.Markdown("# Bolt.new Prompt Generator")
+        gr.Markdown("# UI Screenshot to Prompt Generator")
         gr.Markdown("Upload an image of a UI to generate a prompt for an AI coder to reproduce the design.")
         
         # Main container with 70-30 split
@@ -233,6 +234,14 @@ def launch_gradio_interface():
             
             # Right side - Controls (30%)
             with gr.Column(scale=3):
+                # Add prompt choice selector at the top of controls
+                prompt_choice = gr.Radio(
+                    choices=["Concise", "Extensive"],
+                    value="Concise",
+                    label="Prompt Detail Level",
+                    info="Choose between concise or extensive prompt generation"
+                )
+                
                 splitting_mode = gr.Radio(
                     choices=["Easy", "Advanced"],
                     value="Easy",
@@ -291,17 +300,32 @@ def launch_gradio_interface():
             outputs=[component_width, component_height]
         )
         
-        # Rest of the event handlers...
-        def process_with_settings(image, mode, width, height):
+        def update_prompt_choice(choice):
+            """Update prompt choice configuration"""
+            try:
+                set_prompt_choice(choice)
+                return "Prompt style updated successfully"
+            except ValueError as e:
+                return f"Error: {str(e)}"
+
+        # Add prompt choice change handler
+        prompt_choice.change(
+            fn=update_prompt_choice,
+            inputs=[prompt_choice],
+            outputs=[notification]
+        )
+        
+        def process_with_settings(image, mode, width, height, prompt_style):
             """Process image with current settings"""
             if image is None:
                 return "", "Please upload an image first.", None, "Please upload an image"
             
             try:
-                logger.info(f"Processing with width={width}, height={height}")
+                logger.info(f"Processing with width={width}, height={height}, prompt_style={prompt_style}")
                 final_analysis, full_output, viz_image = gradio_process_image(
                     image=image,
-                    splitting_mode=mode
+                    splitting_mode=mode,
+                    prompt_size=prompt_style.lower()  # Pass prompt style to processing function
                 )
                 
                 viz_visible = mode.lower() == "advanced"
@@ -316,14 +340,15 @@ def launch_gradio_interface():
                 logger.error(f"Error processing image: {str(e)}")
                 return "", f"Error processing image: {str(e)}", gr.update(visible=False), "Error occurred"
 
-        # Connect the process button
+        # Update process button to include prompt_choice
         process_btn.click(
             fn=process_with_settings,
             inputs=[
                 input_image,
                 splitting_mode,
                 component_width,
-                component_height
+                component_height,
+                prompt_choice  # Add prompt_choice to inputs
             ],
             outputs=[
                 final_analysis_text,
