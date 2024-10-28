@@ -1,3 +1,6 @@
+# Project
+split_components/
+
 # Python
 __pycache__/
 *.py[cod]

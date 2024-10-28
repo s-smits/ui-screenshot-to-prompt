@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import os
 import json
-from typing import List, Tuple, Union, Optional, Dict
+from typing import List, Tuple, Union, Dict
 from dataclasses import dataclass
 from logging import getLogger
 from tqdm import tqdm
@@ -115,9 +115,9 @@ class EasyImageSplitter(BaseComponentHandler):
 
     def determine_grid_size(self) -> Tuple[int, int]:
         """Determine optimal grid size based on image dimensions"""
-        aspect_ratio = self.width / self.height
-        
-     # Define thresholds for different grid patterns
+        grid_size, _ = self.get_grid_pattern()
+        return grid_size
+
     def get_grid_pattern(self) -> Tuple[Tuple[int, int], List[str]]:
         """
         Determine grid pattern and return grid size and location names
@@ -524,3 +524,4 @@ def get_image_splitter(splitting_mode: str, image_path: str):
         return EasyImageSplitter(image_path)
     else:
         raise ValueError(f"Invalid splitting mode: {splitting_mode}")
+

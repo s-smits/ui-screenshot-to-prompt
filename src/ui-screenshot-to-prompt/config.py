@@ -1,4 +1,4 @@
-from typing import List, Callable, Any, Tuple, Optional
+from typing import List, Callable, Tuple, Optional
 from dotenv import load_dotenv
 import os
 import logging
@@ -195,18 +195,16 @@ ANALYZE AND OUTPUT THE FOLLOWING JSON STRUCTURE:
 
 def build_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
     """Build comprehensive prompt incorporating all image analyses for UI recreation"""
-    # Parse raw text for components
-    components = [caption.strip() for caption in component_captions]
-    
-    # Build structured component breakdown with clear numbering
+    # Component captions already include location from analyze_component()
+    # Format: "[location] component analysis..."
     component_specs = "\n".join([
-        f"Component {i + 1}:\n{comp}"
-        for i, comp in enumerate(components)
+        f"Component {i + 1}:\n{comp}"  # comp already includes location prefix
+        for i, comp in enumerate(component_captions)
     ])
     
     super_prompt = f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
 
-    [Detailed Analysis]
+    [Component Specifications by Location]
     {component_specs}
 
     [Layout Structure]
@@ -221,7 +219,7 @@ def build_super_prompt(main_image_caption: str, component_captions: List[str], a
     - Primary container dimensions
     - Component positioning map:
         • Header, main content, sidebars, footer
-        �� Layout elements:
+         Layout elements:
             - Number and size of columns (e.g., 3 columns at 33% each)
             - Number and height of rows
             - Grid/box count and arrangement

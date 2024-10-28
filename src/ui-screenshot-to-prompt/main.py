@@ -17,8 +17,6 @@ from config import (
     load_and_initialize_clients,
     SPLITTING,
     set_splitting_mode,
-    MIN_COMPONENT_WIDTH_SIMPLE,
-    MIN_COMPONENT_HEIGHT_SIMPLE,
     MIN_COMPONENT_WIDTH_ADVANCED,
     MIN_COMPONENT_HEIGHT_ADVANCED
 )
@@ -106,7 +104,8 @@ def analyze_component(args):
     Provide structured analysis following the JSON schema in the system prompt.
     Focus on implementation-relevant details."""
     
-    return call_vision_api(component_image, VISION_ANALYSIS_PROMPT, prompt)
+    analysis = call_vision_api(component_image, VISION_ANALYSIS_PROMPT, prompt)
+    return f"[Location: {location}]\n{analysis}"  # Explicitly include location in output
 
 def process_image(image_path: str, min_area: Optional[float] = None, max_components: int = 10):
     """Main function to process and analyze an image"""
@@ -262,13 +261,14 @@ def launch_gradio_interface():
             output_text = gr.Textbox(
                 label="Caption Analyses", 
                 lines=15,
-                show_copy_button=False
+                show_copy_button=True
             )
         
         with gr.Row():
             final_analysis_text = gr.Textbox(
                 label="Final Analysis", 
                 lines=5,
+                show_copy_button=True,
                 visible=False
             )
         
@@ -334,36 +334,53 @@ def launch_gradio_interface():
         )
         
         def copy_final_analysis(final_analysis):
-            """Copy final analysis to clipboard with error handling and validation"""
+            """Copy final analysis to clipboard with robust error handling and validation"""
             try:
+                # Validate input
+                if not isinstance(final_analysis, str):
+                    logger.warning("Invalid final analysis type")
+                    return (
+                        gr.update(value="", visible=False),
+                        "⚠️ Invalid analysis format. Please regenerate the analysis."
+                    )
+                
                 if not final_analysis or final_analysis.strip() == "":
+                    logger.info("Empty analysis detected")
                     return (
                         gr.update(value="", visible=False),
                         "⚠️ No analysis available to copy. Please generate an analysis first."
                     )
                 
-                # Clean up the analysis text
+                # Clean and validate the analysis text
                 cleaned_analysis = final_analysis.strip()
+                if len(cleaned_analysis) < 10:  # Arbitrary minimum length
+                    logger.warning("Analysis too short")
+                    return (
+                        gr.update(value=cleaned_analysis, visible=True),
+                        "⚠️ Analysis seems incomplete. Consider regenerating."
+                    )
                 
                 # Make the text visible and return success message
+                logger.info("Successfully copied analysis")
                 return (
                     gr.update(value=cleaned_analysis, visible=True),
-                    "✅ Copied final analysis!"
+                    "✅ Analysis ready to copy!"
                 )
                 
             except Exception as e:
-                logger.error(f"Error copying final analysis: {str(e)}")
+                logger.error(f"Error in copy operation: {str(e)}", exc_info=True)
                 return (
                     gr.update(value="", visible=False),
-                    "❌ Error copying analysis. Please try again."
+                    "❌ Error processing analysis. Please try again."
                 )
 
-        # Update the copy button click handler
+        # Update the copy button click handler with improved error handling
         copy_btn.click(
             fn=copy_final_analysis,
             inputs=final_analysis_text,
             outputs=[final_analysis_text, notification],
-            show_progress=True
+            show_progress=True,
+            api_name="copy_analysis"
         )
     
     iface.launch()
@@ -400,26 +417,29 @@ def describe_activity(image: Image.Image) -> str:
 
 def call_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
     """Build and send the super prompt integrating all analyses"""
-    super_prompt = build_super_prompt(main_image_caption, component_captions, activity_description)
-    
-    # Add "Build this app:" to the beginning of the prompt
-    super_prompt = f"Build this app: {super_prompt}"
-    
-    # Remove last line from super prompt
-    super_prompt = super_prompt.rstrip()
-    
-    # Print the super prompt
-    print(f"Super prompt: {super_prompt}")
-    
-    if not super_prompt_function:
-        raise Exception("No API client available for super prompt generation")
-
     try:
-        logger.info("Calling super prompt function")
-        return super_prompt_function(super_prompt)
+        # First build the base super prompt
+        super_prompt = build_super_prompt(main_image_caption, component_captions, activity_description)
+        
+        # Clean up the prompt by removing first/last lines and extra whitespace
+        cleaned_prompt = "\n".join(
+            line for line in super_prompt.split("\n")[1:-1] 
+            if line.strip()
+        ).strip()
+        
+        # Add the "Build this app:" prefix
+        final_prompt = f"Build this app: {cleaned_prompt}"
+        
+        logger.info("Generated super prompt: %s", final_prompt)
+        
+        if not super_prompt_function:
+            raise ValueError("No API client available for super prompt generation")
+            
+        return super_prompt_function(final_prompt)
+        
     except Exception as e:
         logger.error("Error in super prompt generation: %s", str(e))
-        raise Exception(f"Error in super prompt generation: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     launch_gradio_interface()
