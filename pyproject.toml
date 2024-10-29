@@ -19,6 +19,7 @@ anthropic = "^0.37.1"
 scikit-image = "^0.24.0"
 openai = "^1.52.2"
 pytesseract = "^0.3.13"
+easyocr = "^1.7.2"
 
 [build-system]
 requires = ["poetry-core"]
