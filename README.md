@@ -37,7 +37,7 @@ Each detected component is analyzed for:
 - Component type classification
 - Position and dimensions
 - Confidence score for detection
-- Location description
+- Location
 
 ## Requirements
 
