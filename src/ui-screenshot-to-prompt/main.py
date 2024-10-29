@@ -9,20 +9,20 @@ from io import BytesIO
 import gradio as gr
 from concurrent.futures import ThreadPoolExecutor
 
+
 # Configuration imports consolidated
 from config import (
     build_super_prompt,
     VISION_ANALYSIS_PROMPT,
     MAIN_DESIGN_ANALYSIS_PROMPT,
     load_and_initialize_clients,
-    SPLITTING,
-    set_splitting_mode,
     set_prompt_choice,
     MIN_COMPONENT_WIDTH_ADVANCED,
-    MIN_COMPONENT_HEIGHT_ADVANCED
+    MIN_COMPONENT_HEIGHT_ADVANCED,
+    MAX_UI_COMPONENTS,
 )
 
-from image_splitter import get_image_splitter
+from detect_components import create_detector  # Only import what we use
 
 # Configure logging
 logging.basicConfig(
@@ -42,13 +42,28 @@ logging.getLogger("openai").setLevel(logging.WARNING)
 # Initialize OpenAI clients
 openai_client, super_prompt_function = load_and_initialize_clients()
 
+# Global variables for UI-selected settings
+DETECTION_METHOD = None
+DETECTION_TERM = None
+
+def set_detection_method(mode: str):
+    """Configure detection method and terminology"""
+    global DETECTION_METHOD, DETECTION_TERM
+    DETECTION_METHOD = mode.lower()
+    DETECTION_TERM = "region" if DETECTION_METHOD == "basic" else "component"
+    logger.info(f"Detection method set to: {DETECTION_METHOD} ({DETECTION_TERM}s)")
+
+def get_detection_method() -> str:
+    """Get current detection method"""
+    return DETECTION_METHOD
+
 def encode_image_base64(image: Image.Image) -> str:
     """Convert PIL Image to base64 string"""
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-def call_vision_api(image: Image.Image, system_prompt: str, user_prompt: str, 
+def call_vision_api(model: str, image: Image.Image, system_prompt: str, user_prompt: str, 
                    temperature: float = 0.1, json_response: bool = True) -> str:
     """Unified function for calling OpenAI Vision API"""
     try:
@@ -71,7 +86,7 @@ def call_vision_api(image: Image.Image, system_prompt: str, user_prompt: str,
         ]
         
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=messages,
             max_tokens=1024,
             temperature=temperature,
@@ -85,75 +100,101 @@ def call_vision_api(image: Image.Image, system_prompt: str, user_prompt: str,
         raise
 
 def analyze_main_design_choices(image: Image.Image, temp: float = 0.1) -> str:
-    """Analyze the main flow/purpose of the entire image"""
+    """Analyze the main flow/purpose of the entire image, returns main_image_caption"""
     logger.info("Analyzing main design choices")
-    prompt = """Analyze this interface's complete design system and structure.
-    Provide a detailed analysis following the JSON schema in the system prompt.
-    Focus on implementation-relevant details and consistent patterns."""
     
-    return call_vision_api(image, MAIN_DESIGN_ANALYSIS_PROMPT, prompt, temp)
+    try:
+        return call_vision_api(
+            model="gpt-4o",
+            image=image, 
+            system_prompt=MAIN_DESIGN_ANALYSIS_PROMPT, 
+            user_prompt="Analyze this interface's complete design system and structure.", 
+            temperature=temp,
+            json_response=False
+        )
+    except Exception as e:
+        logger.error(f"Error analyzing main design: {str(e)}")
+        return "Error analyzing main design structure"
 
-def analyze_component(args):
-    """Analyze individual component of the image"""
-    component_image, main_design_choices, component_index, location = args
-    logger.info(f"Analyzing component {component_index} in {location}")
+def describe_activity(image: Image.Image) -> str:
+    """Describe the activity shown in the image"""
+    logger.info("Describing activity in image")
+    print(" Used image: ", image.filename if hasattr(image, 'filename') else 'Image without filename')
     
-    prompt = f"""Analyze this UI component:
+    return call_vision_api(
+        model="gpt-4o",
+        image=image,
+        system_prompt="Describe the activity of this webpage in a few sentences.",
+        user_prompt="What activity is shown in this image?",
+        temperature=0.1,
+        json_response=False
+    )
+
+def analyze_detection(args):
+    """Analyze individual detection (region/component) of the image"""
+    detection_image, main_design_choices, index, location = args
+    logger.info(f"Analyzing {DETECTION_TERM} {index} in {location}")
+    
+    prompt = f"""Analyze this UI {DETECTION_TERM}:
     - Located in: {location}
-    - Component number: {component_index}
+    - {DETECTION_TERM.title()} number: {index}
     
     Provide structured analysis following the JSON schema in the system prompt.
     Focus on implementation-relevant details."""
     
-    analysis = call_vision_api(component_image, VISION_ANALYSIS_PROMPT, prompt)
-    return f"[Location: {location}]\n{analysis}"  # Explicitly include location in output
+    analysis = call_vision_api(model="gpt-4o-mini", image=detection_image, system_prompt=VISION_ANALYSIS_PROMPT, user_prompt=prompt)
+    return f"[Location: {location}]\n{analysis}"
 
-def process_image(image_path: str, min_area: Optional[float] = None, max_components: int = 10):
+def process_image(image_path: str, min_area: Optional[float] = None, max_detections: int = MAX_UI_COMPONENTS):
     """Main function to process and analyze an image"""
-    logger.info(f"Starting image processing for {image_path}")
     try:
-        # Initialize splitter based on SPLITTING mode
-        splitter = get_image_splitter(SPLITTING, image_path)
+        output_dir = "split_detections"
+        os.makedirs(output_dir, exist_ok=True)
         
-        # Get components (now includes location information)
-        components = splitter.get_components()
+        # Pass max_detections to create_detector
+        detector = create_detector(
+            get_detection_method(), 
+            image_path, 
+            max_components=max_detections
+        )
         
-        if not components:
-            logger.error("No components detected. Exiting processing.")
-            return "No components detected.", [], "Error in final analysis"
+        # Get detections
+        detections = detector.get_components()[:max_detections]  # Limit detections here too
+        
+        if not detections:
+            logger.error(f"No {DETECTION_TERM}s detected. Exiting processing.")
+            return f"No {DETECTION_TERM}s detected.", [], "Error in final analysis"
         
         # Analyze main image first
         main_image = Image.open(image_path)
         main_design_choices = analyze_main_design_choices(main_image)
-        
-        # Get activity description
         activity_description = describe_activity(main_image)
         
-        # Prepare component analysis arguments
+        # Prepare detection analysis arguments
         analysis_args = []
-        for i, component in enumerate(components):
-            x, y, w, h = component.bbox
-            component_img = cv2.cvtColor(np.array(splitter.image), cv2.COLOR_RGB2BGR)[y:y+h, x:x+w]
-            component_rgb = cv2.cvtColor(component_img, cv2.COLOR_BGR2RGB)
-            component_pil = Image.fromarray(component_rgb)
+        for i, detection in enumerate(detections):
+            x, y, w, h = detection.bbox
+            # Convert cropped component back to RGB for VLM
+            detection_img = cv2.cvtColor(np.array(detector.image), cv2.COLOR_RGB2BGR)[y:y+h, x:x+w]
+            detection_rgb = cv2.cvtColor(detection_img, cv2.COLOR_BGR2RGB)
+            detection_pil = Image.fromarray(detection_rgb)
             
-            # Include location information from component.text
-            analysis_args.append((component_pil, main_design_choices, i, component.text))
+            analysis_args.append((detection_pil, main_design_choices, i, detection.text))
             
-            # Save the component
-            output_path = os.path.join(splitter.output_dir, f"component_{i}.png")
-            cv2.imwrite(output_path, component_img)
+            # Save the detection
+            output_path = os.path.join(output_dir, f"{DETECTION_TERM}_{i}.png")
+            cv2.imwrite(output_path, detection_img)
         
-        # Process components in parallel
+        # Process detections in parallel
         with ThreadPoolExecutor(max_workers=5) as executor:
-            component_analyses = list(executor.map(analyze_component, analysis_args))
+            detection_analyses = list(executor.map(analyze_detection, analysis_args))
         
-        # Link analyses to components and include location information
+        # Link analyses to detections
         descriptions = []
-        for component, analysis in zip(components, component_analyses):
-            location_info = f"[{component.text}] "  # Add location prefix
+        for detection, analysis in zip(detections, detection_analyses):
+            location_info = f"[{detection.text}] "
             full_analysis = location_info + analysis
-            component.text = full_analysis  # Store the full analysis
+            detection.text = full_analysis
             descriptions.append(full_analysis)
         
         # Build and call super prompt
@@ -163,11 +204,11 @@ def process_image(image_path: str, min_area: Optional[float] = None, max_compone
             activity_description
         )
         
-        # Visualize all components
-        splitter.visualize_components(
-            cv2.cvtColor(np.array(splitter.image), cv2.COLOR_RGB2BGR),
-            components,
-            os.path.join(splitter.output_dir, "visualization.png")
+        # Visualize all detections
+        detector.visualize_detections(
+            cv2.cvtColor(np.array(detector.image), cv2.COLOR_RGB2BGR),
+            detections,
+            os.path.join(output_dir, "visualization.png")
         )
         
         logger.info("Image processing completed successfully")
@@ -177,7 +218,7 @@ def process_image(image_path: str, min_area: Optional[float] = None, max_compone
         logger.error(f"Error processing image: {str(e)}", exc_info=True)
         return "Error processing image", [], "Error in final analysis"
 
-def gradio_process_image(image, splitting_mode):
+def gradio_process_image(image, splitting_mode, max_components=MAX_UI_COMPONENTS):
     """Process image uploaded through Gradio interface"""
     logger.info(f"Processing image uploaded through Gradio with splitting mode: {splitting_mode}")
     
@@ -185,28 +226,27 @@ def gradio_process_image(image, splitting_mode):
     temp_image_path = "temp_uploaded_image.png"
     image.save(temp_image_path)
     
-    # Update config with selected splitting mode
-    global SPLITTING
-    SPLITTING = splitting_mode.lower()
+    # Set detection method from UI selection
+    set_detection_method(splitting_mode)
     
-    # Process the image
-    main_design_choices, analyses, final_analysis = process_image(temp_image_path)
+    # Process the image with max_components
+    main_design_choices, analyses, final_analysis = process_image(
+        temp_image_path,
+        max_detections=max_components
+    )
     
     # Get visualization image if in advanced mode
     visualization_image = None
-    if splitting_mode.lower() == "advanced":
+    if DETECTION_METHOD == "advanced":
         viz_path = os.path.join("split_components", "visualization.png")
         if os.path.exists(viz_path):
             visualization_image = Image.open(viz_path)
     
-    # Remove temporary image
-    os.remove(temp_image_path)
-    
-    # Prepare output with Markdown formatting
+    # Prepare output with correct terminology
     output = f"**Main Design Choices:**\n{main_design_choices}\n\n"
-    output += "**Component Analyses:**\n"
+    output += f"**{DETECTION_TERM.title()} Analyses:**\n"
     for i, analysis in enumerate(analyses):
-        output += f"**Component {i}:** {analysis}\n"
+        output += f"**{DETECTION_TERM.title()} {i}:** {analysis}\n"
     output += f"\n**Final Analysis:**\n{final_analysis}"
     
     return final_analysis, output, visualization_image
@@ -234,7 +274,7 @@ def launch_gradio_interface():
             
             # Right side - Controls (30%)
             with gr.Column(scale=3):
-                # Add prompt choice selector at the top of controls
+                # Add prompt choice selector at the top of control
                 prompt_choice = gr.Radio(
                     choices=["Concise", "Extensive"],
                     value="Extensive",
@@ -242,24 +282,31 @@ def launch_gradio_interface():
                     info="Choose between concise or extensive prompt generation"
                 )
                 
-                splitting_mode = gr.Radio(
-                    choices=["Easy", "Advanced"],
-                    value="Easy",
-                    label="Splitting Mode",
-                    info="Easy: Grid-based splitting, Advanced: Smart component detection"
+                detection_method = gr.Radio(
+                    choices=["Basic", "Advanced"],
+                    value="Basic",
+                    label="Detection Method",
+                    info="Basic: Grid-based splitting, Advanced: Smart component detection"
                 )
                 
                 # Advanced settings (individual components, not in a Column)
                 component_width = gr.Number(
                     label="Minimum Component Width",
                     value=MIN_COMPONENT_WIDTH_ADVANCED,
-                    step=1,
-                    minimum=1,
+                    step=5,
+                    minimum=20,
                     visible=False
                 )
                 component_height = gr.Number(
                     label="Minimum Component Height",
                     value=MIN_COMPONENT_HEIGHT_ADVANCED,
+                    step=5,
+                    minimum=20,
+                    visible=False
+                )
+                max_components = gr.Number(
+                    label="Maximum Components",
+                    value=MAX_UI_COMPONENTS,
                     step=1,
                     minimum=1,
                     visible=False
@@ -287,17 +334,21 @@ def launch_gradio_interface():
             
         notification = gr.Textbox(label="Status", interactive=False)
         
-        def update_mode(mode):
+        def update_detection_method(mode):
             """Update visibility of advanced settings based on mode"""
-            set_splitting_mode(mode)
+            set_detection_method(mode)
             is_advanced = mode.lower() == "advanced"
-            return gr.update(visible=is_advanced), gr.update(visible=is_advanced)
+            return (
+                gr.update(visible=is_advanced),
+                gr.update(visible=is_advanced),
+                gr.update(visible=is_advanced)
+            )
         
-        # Update splitting_mode change handler
-        splitting_mode.change(
-            fn=update_mode,
-            inputs=[splitting_mode],
-            outputs=[component_width, component_height]
+        # Update detection_method change handler
+        detection_method.change(
+            fn=update_detection_method,
+            inputs=[detection_method],
+            outputs=[component_width, component_height, max_components]
         )
         
         def update_prompt_choice(choice):
@@ -315,16 +366,17 @@ def launch_gradio_interface():
             outputs=[notification]
         )
         
-        def process_with_settings(image, mode, width, height, prompt_style):
+        def process_with_settings(image, mode, width, height, max_components, prompt_style):
             """Process image with current settings"""
             if image is None:
                 return "", "Please upload an image first.", None, "Please upload an image"
             
             try:
-                logger.info(f"Processing with width={width}, height={height}, prompt_style={prompt_style}")
+                logger.info(f"Processing with width={width}, height={height}, max_components={max_components}, prompt_style={prompt_style}")
                 final_analysis, full_output, viz_image = gradio_process_image(
                     image=image,
-                    splitting_mode=mode
+                    splitting_mode=mode,
+                    max_components=max_components
                 )
                 
                 viz_visible = mode.lower() == "advanced"
@@ -344,10 +396,11 @@ def launch_gradio_interface():
             fn=process_with_settings,
             inputs=[
                 input_image,
-                splitting_mode,
+                detection_method,
                 component_width,
                 component_height,
-                prompt_choice  # Add prompt_choice to inputs
+                max_components,
+                prompt_choice
             ],
             outputs=[
                 final_analysis_text,
@@ -410,7 +463,6 @@ def launch_gradio_interface():
     iface.launch()
 
 def main():
-    # Process single image (if needed)
     logger.info("Starting image processing")
     image_path = os.path.join("images", "image.png")
     logger.info("Processing image...")
@@ -418,26 +470,13 @@ def main():
     
     if analyses:
         logger.info(f"Main design choices: {main_design_choices}")
-        logger.info("\nComponent analyses:")
+        logger.info(f"\n{DETECTION_TERM.title()} analyses:")
         for i, analysis in enumerate(analyses):
-            logger.info(f"Component {i}: {analysis}")
+            logger.info(f"{DETECTION_TERM.title()} {i}: {analysis}")
         logger.info("\nFinal Analysis:")
         logger.info(final_analysis)
     else:
         logger.error("Failed to process image")
-
-def describe_activity(image: Image.Image) -> str:
-    """Describe the activity shown in the image"""
-    logger.info("Describing activity in image")
-    prompt = "What activity is shown in this image?"
-    
-    return call_vision_api(
-        image, 
-        "Describe the activity in a few sentences.", 
-        prompt,
-        temperature=0.1,
-        json_response=False
-    )
 
 def call_super_prompt(main_image_caption: str, component_captions: List[str], activity_description: str) -> str:
     """Build and send the super prompt integrating all analyses"""
