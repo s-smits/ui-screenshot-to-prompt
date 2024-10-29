@@ -9,14 +9,33 @@ from anthropic import Anthropic
 logger = logging.getLogger(__name__)
 
 # Global configuration variables
-global SPLITTING
-SPLITTING = 'easy'
+DETECTION_METHOD = 'basic'
+DETECTION_TERM = 'region' if DETECTION_METHOD == 'basic' else 'component'
 
 # Default component dimensions
 MIN_COMPONENT_WIDTH_ADVANCED = 50
 MIN_COMPONENT_HEIGHT_ADVANCED = 50
-MIN_COMPONENT_WIDTH_SIMPLE = 200
-MIN_COMPONENT_HEIGHT_SIMPLE = 200
+MAX_UI_COMPONENTS = 6
+
+MIN_REGION_WIDTH_SIMPLE = 200
+MIN_REGION_HEIGHT_SIMPLE = 200
+
+def set_detection_method(method: str):
+    """Update the detection method configuration"""
+    global DETECTION_METHOD, DETECTION_TERM
+    if method.lower() not in ['basic', 'advanced']:
+        raise ValueError("Invalid detection method. Must be 'basic' or 'advanced'")
+    DETECTION_METHOD = method.lower()
+    DETECTION_TERM = 'region' if DETECTION_METHOD == 'basic' else 'component'
+    logger.info(f"Detection method set to: {DETECTION_METHOD} ({DETECTION_TERM}s)")
+
+def get_detection_method() -> str:
+    """Get current detection method"""
+    return DETECTION_METHOD
+
+def get_detection_term() -> str:
+    """Get current detection terminology"""
+    return DETECTION_TERM
 
 def set_prompt_choice(choice: str):
     """Update the prompt choice configuration"""
@@ -25,18 +44,6 @@ def set_prompt_choice(choice: str):
         raise ValueError("Invalid prompt choice. Must be 'concise' or 'extensive'")
     PROMPT_CHOICE = choice.lower()
     logger.info(f"Prompt choice set to: {PROMPT_CHOICE}")
-
-def set_splitting_mode(mode: str):
-    """Update the splitting mode configuration"""
-    global SPLITTING
-    if mode.lower() not in ['easy', 'advanced']:
-        raise ValueError("Invalid splitting mode. Must be 'easy' or 'advanced'")
-    SPLITTING = mode.lower()
-    logger.info(f"Splitting mode set to: {SPLITTING}")
-
-def get_splitting_mode() -> str:
-    """Get the current splitting mode"""
-    return SPLITTING
 
 def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]]]:
     # Load environment variables from the .env file
@@ -67,7 +74,7 @@ def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]
             response = anthropic_client.messages.create(
                 model="claude-3-sonnet-latest",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048
+                max_tokens=4096 
             )
             return response.content[0].text
 
@@ -83,7 +90,7 @@ def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]
             response = openrouter_client.chat.completions.create(
                 model="anthropic/claude-3-sonnet",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2048
+                max_tokens=4096 
             )
             return response.choices[0].message.content
 
@@ -203,7 +210,7 @@ ANALYZE AND OUTPUT THE FOLLOWING JSON STRUCTURE:
 
 def build_super_prompt(
     main_image_caption: str, 
-    component_captions: List[str], 
+    region_descriptions: List[str],
     activity_description: str,
     prompt_size: str = "concise"
 ) -> str:
@@ -211,27 +218,34 @@ def build_super_prompt(
     
     Args:
         main_image_caption: Overall layout description
-        component_captions: List of component descriptions
+        region_descriptions: List of detected UI regions from image splitting
         activity_description: User interaction patterns
         prompt_size: Size of prompt - "concise" or "extensive" (default: "concise")
     """
-    # Common component formatting
-    component_specs = "\n".join([
-        f"Component {i + 1}: {comp}"
-        for i, comp in enumerate(component_captions)
+    
+    # Get current detection terminology
+    detection_term = get_detection_term()
+    
+    # Build the region specifications string with proper terminology
+    region_specs = "\n".join([
+        f"{detection_term.title()} {i + 1}: {desc}"
+        for i, desc in enumerate(region_descriptions)
     ])
 
+    # Format main caption if it's not empty
+    layout_section = main_image_caption if main_image_caption else "No layout analysis available"
+
     if prompt_size == "concise":
-        return f"""This study presents a systematic analysis framework for precise UI replication, incorporating component specifications and visual hierarchy assessment. The framework examines:
+        prompt = f"""This study presents a systematic analysis framework for precise UI replication, incorporating component specifications and visual hierarchy assessment. The framework examines:
 
-        [Component Analysis]
-        {component_specs}
+        [{detection_term.title()} Analysis]
+        {region_specs}
 
-        [Visual Structure]
-        {main_image_caption}
+        [Layout Analysis]
+        {layout_section}
 
         [Interactive Elements]
-        {activity_description}
+        {str(activity_description)}
 
         Technical Specifications for Implementation:
 
@@ -260,18 +274,20 @@ def build_super_prompt(
         This framework enables precise replication while maintaining structural integrity and interactive functionality across various viewport dimensions.
         """
     else:
-        return f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
+        prompt = f"""You are an expert UI development agent tasked with providing exact technical specifications for recreating this interface. Analyze all details with high precision:
 
-        [Component Specifications by Location]
-        {component_specs}
+        [Components Specifications by Location]
+        {region_specs}
 
         [Layout Structure]
-        {main_image_caption}
+        {layout_section}
 
         [Interaction Patterns]
-        {activity_description}
+        {str(activity_description)}
 
-        Provide a complete technical specification for exact replication:
+        Note: If a component has already been explained in detail above, only its name and location will be listed below to provide geographical context.
+
+        Provide a complete technical specification for exact replication in text format:
 
         1. Layout Structure
         - Primary container dimensions
@@ -308,13 +324,13 @@ def build_super_prompt(
         
         3. Visible Elements
         - Controls:
-            • Button appearances
-            • Form element styling
-            • Interactive element looks
+            • Button appearances (if new, otherwise location only)
+            • Form element styling (if new, otherwise location only)
+            • Interactive element looks (if new, otherwise location only)
         - Static Elements:
-            • Images and icons
-            • Text content
-            • Decorative elements
+            • Images and icons (if new, otherwise location only)
+            • Text content (if new, otherwise location only)
+            • Decorative elements (if new, otherwise location only)
         - Visual States:
             • Active/selected states
             • Disabled appearances
@@ -334,5 +350,10 @@ def build_super_prompt(
         - Element stacking
         - Content grouping
         - Visual emphasis
-        - Spatial relationships
+        - Spatial relationships between previously described components
         """
+
+    print("Generated super prompt:")
+    print(prompt)
+    
+    return prompt
