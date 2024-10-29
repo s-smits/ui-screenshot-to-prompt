@@ -141,4 +141,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Gradio for the web interface
 - Tesseract OCR for text extraction
 
-<iframe style="width:100%;height:auto;min-width:600px;min-height:400px;" src="https://star-history.com/embed?secret=Z2hwX2VGOWRDU3U4SDliQ1d4b3VjYlJzZlhWdkdMbm9QbDJPdERrVg==#s-smits/ui-screenshot-to-prompt&Date" frameBorder="0"></iframe>
+[![Star History Chart](https://api.star-history.com/svg?repos=s-smits/ui-screenshot-to-prompt&type=Date)](https://star-history.com/#s-smits/ui-screenshot-to-prompt&Date)
