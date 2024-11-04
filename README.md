@@ -140,5 +140,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - OpenRouter for API access
 - Gradio for the web interface
 - Tesseract OCR for text extraction
-
+- 
 [![Star History Chart](https://api.star-history.com/svg?repos=s-smits/ui-screenshot-to-prompt&type=Date)](https://star-history.com/#s-smits/ui-screenshot-to-prompt&Date)
