@@ -12,15 +12,42 @@ opencv-python = "^4.10.0.84"
 gradio = "^5.4.0"
 numpy = "^2.1.2"
 pillow = "^11.0.0"
-scikit-learn = "^1.5.2"
-tqdm = "^4.66.5"
 python-dotenv = "^1.0.1"
 anthropic = "^0.37.1"
-scikit-image = "^0.24.0"
 openai = "^1.52.2"
-pytesseract = "^0.3.13"
 easyocr = "^1.7.2"
+
+[project]
+name = "ui-screenshot-to-prompt"
+version = "0.3.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+license = { text = "MIT" }
+authors = [
+    { name = "Stijn Smits" }
+]
+dependencies = [
+    "opencv-python>=4.10.0.84,<5.0.0",
+    "gradio>=5.4.0,<6.0.0",
+    "numpy>=2.1.2,<3.0.0",
+    "pillow>=11.0.0,<12.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "anthropic>=0.37.1,<0.38.0",
+    "openai>=1.52.2,<2.0.0",
+    "easyocr>=1.7.2,<2.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3.3,<9.0.0",
+]
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

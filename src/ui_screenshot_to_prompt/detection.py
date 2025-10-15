@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Tuple, Dict
 from dataclasses import dataclass
 from logging import getLogger
-from config import (
+from .config import (
     MIN_REGION_WIDTH_SIMPLE, 
     MIN_REGION_HEIGHT_SIMPLE, 
     MIN_COMPONENT_WIDTH_ADVANCED, 
@@ -46,10 +46,17 @@ class DetectorBase:
     ) -> UIDetection:
         """Create a detection with consistent naming"""
         detection_term = get_detection_term()
+        normalized_type = (detection_type or detection_term).lower()
+        if normalized_type == detection_term:
+            qualified_type = detection_term
+        elif normalized_type == "unknown":
+            qualified_type = detection_term
+        else:
+            qualified_type = f"{detection_term}_{normalized_type}"
         
         return UIDetection(
             bbox=bbox,
-            type=f"{detection_term}_{detection_type}" if detection_type != "unknown" else detection_term,
+            type=qualified_type,
             text=text or location,
             confidence=confidence
         )
@@ -195,11 +202,10 @@ class AdvancedDetector(ComponentDetectorBase):
         self.image_path = image_path
         self.min_width = min_width
         self.min_height = min_height
-        self.MIN_DETECTION_AREA = self.min_width * self.min_height
         self.max_ui_components = max_components
-        print("Initializing EasyOCR (this may download models on first run)...")
+        logger.info("Initializing EasyOCR (models will download on first run)")
         self.reader = easyocr.Reader(['en'], download_enabled=True)
-        print("EasyOCR initialization complete!")
+        logger.info("EasyOCR initialization complete")
     
     def detect_edges(self) -> np.ndarray:
         """Detect edges in the image using Canny edge detector"""

@@ -1,0 +1,8 @@
+opencv-python>=4.10.0.84,<5.0.0
+gradio>=5.4.0,<6.0.0
+numpy>=2.1.2,<3.0.0
+pillow>=11.0.0,<12.0.0
+python-dotenv>=1.0.1,<2.0.0
+anthropic>=0.37.1,<0.38.0
+openai>=1.52.2,<2.0.0
+easyocr>=1.7.2,<2.0.0

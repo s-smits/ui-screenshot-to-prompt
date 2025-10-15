@@ -1,9 +1,18 @@
 from typing import List, Callable, Tuple, Optional
+from functools import lru_cache
 from dotenv import load_dotenv
 import os
 import logging
-from openai import OpenAI
-from anthropic import Anthropic
+
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - handled gracefully at runtime
+    OpenAI = None  # type: ignore
+
+try:
+    from anthropic import Anthropic
+except ImportError:  # pragma: no cover - handled gracefully at runtime
+    Anthropic = None  # type: ignore
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -11,11 +20,15 @@ logger = logging.getLogger(__name__)
 # Global configuration variables
 DETECTION_METHOD = 'basic'
 DETECTION_TERM = 'region' if DETECTION_METHOD == 'basic' else 'component'
+PROMPT_CHOICE = 'extensive'
 
 # Default component dimensions
 MIN_COMPONENT_WIDTH_ADVANCED = 50
 MIN_COMPONENT_HEIGHT_ADVANCED = 50
 MAX_UI_COMPONENTS = 6
+
+MIN_COMPONENT_WIDTH = MIN_COMPONENT_WIDTH_ADVANCED
+MIN_COMPONENT_HEIGHT = MIN_COMPONENT_HEIGHT_ADVANCED
 
 MIN_REGION_WIDTH_SIMPLE = 200
 MIN_REGION_HEIGHT_SIMPLE = 200
@@ -40,11 +53,29 @@ def get_detection_term() -> str:
 def set_prompt_choice(choice: str):
     """Update the prompt choice configuration"""
     global PROMPT_CHOICE
-    if choice.lower() not in ['concise', 'extensive']:
+    normalized = choice.lower()
+    if normalized not in ['concise', 'extensive']:
         raise ValueError("Invalid prompt choice. Must be 'concise' or 'extensive'")
-    PROMPT_CHOICE = choice.lower()
-    logger.info(f"Prompt choice set to: {PROMPT_CHOICE}")
+    PROMPT_CHOICE = normalized
+    logger.info("Prompt choice set to: %s", PROMPT_CHOICE)
 
+
+def get_prompt_choice() -> str:
+    """Return the currently configured prompt choice"""
+    return PROMPT_CHOICE
+
+
+def set_splitting_mode(mode: str):
+    """Alias for UI backwards compatibility"""
+    set_detection_method(mode)
+
+
+def get_splitting_mode() -> str:
+    """Alias for UI backwards compatibility"""
+    return get_detection_method()
+
+
+@lru_cache(maxsize=1)
 def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]]]:
     # Load environment variables from the .env file
     load_dotenv()
@@ -56,9 +87,9 @@ def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
 
     # Check if OpenAI API key is available
-    if not openai_api_key:
-        logger.error("OPENAI_API_KEY is not set in the environment variables.")
-        raise ValueError("Missing OpenAI API key")
+    if OpenAI is None or not openai_api_key:
+        logger.error("OPENAI_API_KEY is not set or OpenAI client missing.")
+        raise ValueError("Missing OpenAI API client configuration")
 
     # Initialize the OpenAI client
     openai_client = OpenAI(api_key=openai_api_key)
@@ -67,7 +98,7 @@ def load_and_initialize_clients() -> Tuple[OpenAI, Optional[Callable[[str], str]
     # Initialize super prompt function
     super_prompt_function: Optional[Callable[[str], str]] = None
 
-    if anthropic_api_key:
+    if anthropic_api_key and Anthropic is not None:
         anthropic_client = Anthropic(api_key=anthropic_api_key)
         
         def anthropic_super_prompt(prompt: str) -> str:
@@ -212,7 +243,7 @@ def build_super_prompt(
     main_image_caption: str, 
     region_descriptions: List[str],
     activity_description: str,
-    prompt_size: str = "concise"
+    prompt_size: Optional[str] = None
 ) -> str:
     """Build UI recreation prompt with configurable detail level
     
@@ -220,22 +251,23 @@ def build_super_prompt(
         main_image_caption: Overall layout description
         region_descriptions: List of detected UI regions from image splitting
         activity_description: User interaction patterns
-        prompt_size: Size of prompt - "concise" or "extensive" (default: "concise")
+        prompt_size: Size of prompt - "concise" or "extensive" (default: current prompt setting)
     """
-    
+
     # Get current detection terminology
     detection_term = get_detection_term()
+    active_prompt = (prompt_size or get_prompt_choice()).lower()
     
     # Build the region specifications string with proper terminology
-    region_specs = "\n".join([
+    region_specs = "\n".join(
         f"{detection_term.title()} {i + 1}: {desc}"
         for i, desc in enumerate(region_descriptions)
-    ])
+    ) or "No regional analysis available"
 
     # Format main caption if it's not empty
     layout_section = main_image_caption if main_image_caption else "No layout analysis available"
 
-    if prompt_size == "concise":
+    if active_prompt == "concise":
         prompt = f"""This study presents a systematic analysis framework for precise UI replication, incorporating component specifications and visual hierarchy assessment. The framework examines:
 
         [{detection_term.title()} Analysis]
@@ -353,7 +385,4 @@ def build_super_prompt(
         - Spatial relationships between previously described components
         """
 
-    print("Generated super prompt:")
-    print(prompt)
-    
     return prompt
